@@ -1,0 +1,556 @@
+---
+title: OpenStreetMap Configuration
+description: Enrich your property data with geographic features from OpenStreetMap including parks, water bodies, schools, and transportation
+---
+
+## Overview
+
+OpenAVM Kit can automatically enrich your property data with geographic features from OpenStreetMap (OSM). This adds distance-based features that measure proximity to important amenities like:
+
+- Water bodies (lakes, rivers, reservoirs)
+- Parks and green spaces
+- Educational institutions (universities, colleges)
+- Transportation infrastructure (major roads, railways)
+- Golf courses
+
+These distance features can significantly improve property valuation models by capturing location-based amenities.
+
+## How It Works
+
+OpenStreetMap enrichment:
+
+1. **Downloads OSM data** for your locality
+2. **Filters features** by type and size (e.g., parks larger than 2,000 m²)
+3. **Identifies top features** (e.g., the 5 largest parks)
+4. **Calculates distances** from each parcel to nearby features
+5. **Adds distance fields** to your dataset
+
+<Note>
+No API key required! OpenStreetMap data is freely available under the Open Database License.
+</Note>
+
+## Configuration
+
+Add OpenStreetMap enrichment to your `settings.json`:
+
+```json
+{
+  "process": {
+    "enrich": {
+      "universe": {
+        "openstreetmap": {
+          "enabled": true,
+          "water_bodies": {
+            "enabled": true,
+            "min_area": 10000,
+            "top_n": 5,
+            "sort_by": "area"
+          },
+          "parks": {
+            "enabled": true,
+            "min_area": 2000,
+            "top_n": 5,
+            "sort_by": "area"
+          },
+          "educational": {
+            "enabled": true,
+            "min_area": 1000,
+            "top_n": 5,
+            "sort_by": "area"
+          },
+          "transportation": {
+            "enabled": true,
+            "min_length": 1000,
+            "top_n": 5,
+            "sort_by": "length"
+          },
+          "golf_courses": {
+            "enabled": true,
+            "min_area": 10000,
+            "top_n": 3,
+            "sort_by": "area"
+          }
+        },
+        "distances": [
+          {
+            "id": "water_bodies",
+            "max_distance": 1500,
+            "unit": "m"
+          },
+          {
+            "id": "water_bodies_top",
+            "field": "name",
+            "max_distance": 1500,
+            "unit": "m"
+          },
+          {
+            "id": "parks",
+            "max_distance": 800,
+            "unit": "m"
+          },
+          {
+            "id": "parks_top",
+            "field": "name",
+            "max_distance": 800,
+            "unit": "m"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+## Feature Types
+
+### Water Bodies
+
+Rivers, lakes, reservoirs, and other water features.
+
+<ParamField path="openstreetmap.water_bodies.enabled" type="boolean" default="false">
+  Enable water body enrichment
+</ParamField>
+
+<ParamField path="openstreetmap.water_bodies.min_area" type="number" default="10000">
+  Minimum area in square meters. Filters out small ponds and streams.
+  
+  **Recommended values:**
+  - `10000` (1 hectare) - Significant water bodies only
+  - `5000` (0.5 hectare) - Include medium-sized features
+  - `1000` (0.1 hectare) - Include smaller features
+</ParamField>
+
+<ParamField path="openstreetmap.water_bodies.top_n" type="number" default="5">
+  Number of largest water bodies to track individually. The top N features will have individual distance fields created.
+</ParamField>
+
+<ParamField path="openstreetmap.water_bodies.sort_by" type="string" default="area">
+  Property to sort by when selecting top N features. Use `area` for water bodies.
+</ParamField>
+
+### Parks and Green Spaces
+
+Public parks, gardens, playgrounds, and recreational areas.
+
+<ParamField path="openstreetmap.parks.enabled" type="boolean" default="false">
+  Enable parks enrichment
+</ParamField>
+
+<ParamField path="openstreetmap.parks.min_area" type="number" default="2000">
+  Minimum park area in square meters
+  
+  **Recommended values:**
+  - `2000` (0.2 hectare) - Neighborhood parks and larger
+  - `5000` (0.5 hectare) - Community parks and larger
+  - `10000` (1 hectare) - Regional parks only
+</ParamField>
+
+<ParamField path="openstreetmap.parks.top_n" type="number" default="5">
+  Number of largest parks to track individually
+</ParamField>
+
+### Educational Institutions
+
+Universities, colleges, and other educational facilities.
+
+<ParamField path="openstreetmap.educational.enabled" type="boolean" default="false">
+  Enable educational institution enrichment
+</ParamField>
+
+<ParamField path="openstreetmap.educational.min_area" type="number" default="1000">
+  Minimum campus area in square meters
+  
+  **Recommended values:**
+  - `1000` (0.1 hectare) - Small colleges and up
+  - `5000` (0.5 hectare) - Medium campuses and up
+  - `10000` (1 hectare) - Large universities only
+</ParamField>
+
+<ParamField path="openstreetmap.educational.top_n" type="number" default="5">
+  Number of largest educational institutions to track individually
+</ParamField>
+
+### Transportation
+
+Major roads, highways, railways, and transit infrastructure.
+
+<ParamField path="openstreetmap.transportation.enabled" type="boolean" default="false">
+  Enable transportation enrichment
+</ParamField>
+
+<ParamField path="openstreetmap.transportation.min_length" type="number" default="1000">
+  Minimum feature length in meters. Filters out small road segments.
+  
+  **Recommended values:**
+  - `1000` (1 km) - Major routes only
+  - `500` (0.5 km) - Include medium routes
+  - `100` (100 m) - Include most routes
+</ParamField>
+
+<ParamField path="openstreetmap.transportation.top_n" type="number" default="5">
+  Number of longest transportation routes to track individually
+</ParamField>
+
+<ParamField path="openstreetmap.transportation.sort_by" type="string" default="length">
+  Property to sort by. Use `length` for linear features like roads and railways.
+</ParamField>
+
+### Golf Courses
+
+Golf courses and related facilities.
+
+<ParamField path="openstreetmap.golf_courses.enabled" type="boolean" default="false">
+  Enable golf course enrichment
+</ParamField>
+
+<ParamField path="openstreetmap.golf_courses.min_area" type="number" default="10000">
+  Minimum golf course area in square meters
+  
+  **Recommended values:**
+  - `10000` (1 hectare) - Small courses and up
+  - `50000` (5 hectares) - Standard courses only
+  - `100000` (10 hectares) - Large courses only
+</ParamField>
+
+<ParamField path="openstreetmap.golf_courses.top_n" type="number" default="3">
+  Number of largest golf courses to track individually
+</ParamField>
+
+## Distance Calculations
+
+The `distances` array defines how to calculate distance features:
+
+```json
+{
+  "distances": [
+    {
+      "id": "water_bodies",
+      "max_distance": 1500,
+      "unit": "m"
+    },
+    {
+      "id": "parks_top",
+      "field": "name",
+      "max_distance": 800,
+      "unit": "m"
+    }
+  ]
+}
+```
+
+<ParamField path="distances[].id" type="string" required>
+  Identifier for the feature type
+  
+  **Aggregate distances:**
+  - `water_bodies` - Distance to any water body
+  - `parks` - Distance to any park
+  - `educational` - Distance to any educational institution
+  - `transportation` - Distance to any transportation route
+  - `golf_courses` - Distance to any golf course
+  
+  **Individual distances:**
+  - `water_bodies_top` - Distance to each named water body
+  - `parks_top` - Distance to each named park
+  - `educational_top` - Distance to each named institution
+  - `transportation_top` - Distance to each named route
+  - `golf_courses_top` - Distance to each named course
+</ParamField>
+
+<ParamField path="distances[].field" type="string">
+  Field to use for naming individual features. Typically `"name"` for top N features. Omit this for aggregate distances.
+</ParamField>
+
+<ParamField path="distances[].max_distance" type="number" required>
+  Maximum distance to calculate in the specified unit. Features beyond this distance will be marked as null or max distance.
+  
+  **Recommended values:**
+  - `800` m - Walking distance (parks, schools)
+  - `1500` m - Short drive (water, golf courses)
+  - `3000` m - Medium drive (universities, major amenities)
+</ParamField>
+
+<ParamField path="distances[].unit" type="string" default="m">
+  Unit of measurement. Currently `"m"` (meters) is standard.
+</ParamField>
+
+## Output Fields
+
+OpenStreetMap enrichment creates distance fields in your dataset:
+
+### Aggregate Distance Fields
+
+Distance to the nearest feature of each type:
+
+- `dist_to_water_bodies_any` - Distance to nearest water body (meters)
+- `dist_to_parks_any` - Distance to nearest park (meters)
+- `dist_to_educational_any` - Distance to nearest educational institution (meters)
+- `dist_to_transportation_any` - Distance to nearest transportation route (meters)
+- `dist_to_golf_courses_any` - Distance to nearest golf course (meters)
+
+### Individual Distance Fields
+
+Distance to each of the top N named features:
+
+- `dist_to_water_bodies_lake_travis` - Distance to Lake Travis (meters)
+- `dist_to_parks_zilker_park` - Distance to Zilker Park (meters)
+- `dist_to_educational_university_of_texas` - Distance to University of Texas (meters)
+- `dist_to_transportation_interstate_35` - Distance to Interstate 35 (meters)
+- `dist_to_golf_courses_barton_creek` - Distance to Barton Creek Golf Course (meters)
+
+<Note>
+Field names are automatically sanitized (lowercased, spaces replaced with underscores) to ensure compatibility with most data formats.
+</Note>
+
+## Example Configurations
+
+<CodeGroup>
+```json Minimal Setup
+{
+  "process": {
+    "enrich": {
+      "universe": {
+        "openstreetmap": {
+          "enabled": true,
+          "parks": {
+            "enabled": true,
+            "min_area": 2000,
+            "top_n": 5,
+            "sort_by": "area"
+          }
+        },
+        "distances": [
+          {
+            "id": "parks",
+            "max_distance": 800,
+            "unit": "m"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+```json Comprehensive Setup
+{
+  "process": {
+    "enrich": {
+      "universe": {
+        "openstreetmap": {
+          "enabled": true,
+          "water_bodies": {
+            "enabled": true,
+            "min_area": 10000,
+            "top_n": 5,
+            "sort_by": "area"
+          },
+          "parks": {
+            "enabled": true,
+            "min_area": 2000,
+            "top_n": 5,
+            "sort_by": "area"
+          },
+          "educational": {
+            "enabled": true,
+            "min_area": 1000,
+            "top_n": 5,
+            "sort_by": "area"
+          },
+          "transportation": {
+            "enabled": true,
+            "min_length": 1000,
+            "top_n": 5,
+            "sort_by": "length"
+          },
+          "golf_courses": {
+            "enabled": true,
+            "min_area": 10000,
+            "top_n": 3,
+            "sort_by": "area"
+          }
+        },
+        "distances": [
+          {"id": "water_bodies", "max_distance": 1500, "unit": "m"},
+          {"id": "water_bodies_top", "field": "name", "max_distance": 1500, "unit": "m"},
+          {"id": "parks", "max_distance": 800, "unit": "m"},
+          {"id": "parks_top", "field": "name", "max_distance": 800, "unit": "m"},
+          {"id": "educational", "max_distance": 1500, "unit": "m"},
+          {"id": "educational_top", "field": "name", "max_distance": 1500, "unit": "m"},
+          {"id": "transportation", "max_distance": 1500, "unit": "m"},
+          {"id": "transportation_top", "field": "name", "max_distance": 1500, "unit": "m"},
+          {"id": "golf_courses", "max_distance": 1500, "unit": "m"},
+          {"id": "golf_courses_top", "field": "name", "max_distance": 1500, "unit": "m"}
+        ]
+      }
+    }
+  }
+}
+```
+
+```json Urban Focus
+{
+  "process": {
+    "enrich": {
+      "universe": {
+        "openstreetmap": {
+          "enabled": true,
+          "parks": {
+            "enabled": true,
+            "min_area": 1000,
+            "top_n": 10,
+            "sort_by": "area"
+          },
+          "educational": {
+            "enabled": true,
+            "min_area": 500,
+            "top_n": 8,
+            "sort_by": "area"
+          },
+          "transportation": {
+            "enabled": true,
+            "min_length": 500,
+            "top_n": 10,
+            "sort_by": "length"
+          }
+        },
+        "distances": [
+          {"id": "parks", "max_distance": 500, "unit": "m"},
+          {"id": "educational", "max_distance": 1000, "unit": "m"},
+          {"id": "transportation", "max_distance": 300, "unit": "m"}
+        ]
+      }
+    }
+  }
+}
+```
+</CodeGroup>
+
+## Using in Models
+
+The distance fields are automatically added to your dataset and can be used in models:
+
+```python
+from openavmkit.pipeline import run_pipeline
+
+# Run pipeline with OSM enrichment
+run_pipeline(
+    locality="us-tx-travis",
+    settings_file="in/settings.json"
+)
+
+# The output dataset includes OSM distance fields
+# These fields are automatically classified as "land" features
+```
+
+The OpenStreetMap distance fields are automatically recognized and classified:
+
+- Fields starting with `dist_to_` are treated as numeric land features
+- They're included in feature selection and modeling
+- No additional configuration needed
+
+## Performance Considerations
+
+<Tip>
+**Start Small**
+
+Begin with a small number of feature types and increase as needed. Each feature type adds processing time and data size.
+</Tip>
+
+<Tip>
+**Use Appropriate Thresholds**
+
+Set `min_area` and `min_length` values to filter out insignificant features. This improves performance and model quality.
+</Tip>
+
+<Tip>
+**Limit Top N**
+
+Tracking too many individual features can create hundreds of fields. Start with `top_n: 3-5` and increase only if needed.
+</Tip>
+
+## Best Practices
+
+### Choose Relevant Features
+
+Select feature types relevant to your market:
+
+- **Residential**: Parks, schools, water bodies
+- **Luxury residential**: Golf courses, water bodies, large parks
+- **Urban**: Transportation, parks, educational institutions
+- **Suburban**: Parks, schools, golf courses
+
+### Set Appropriate Distances
+
+Consider typical travel modes in your area:
+
+- **Walking distance**: 400-800 meters (parks, schools)
+- **Short drive**: 1,000-2,000 meters (amenities)
+- **Longer drive**: 2,000-5,000 meters (special features)
+
+### Balance Granularity
+
+Use both aggregate and individual distances:
+
+- **Aggregate** (`parks`) - Captures general proximity to amenity type
+- **Individual** (`parks_top`) - Captures proximity to specific high-value features
+
+## Troubleshooting
+
+### No Features Found
+
+**Issue:** OpenStreetMap enrichment runs but no features are found.
+
+**Solutions:**
+- Lower the `min_area` or `min_length` thresholds
+- Verify OSM has data for your locality
+- Check that feature types exist in your area (e.g., golf courses may be rare in urban areas)
+
+### Too Many Features
+
+**Issue:** Hundreds of distance fields are created.
+
+**Solutions:**
+- Reduce `top_n` to track fewer individual features
+- Increase `min_area` or `min_length` to filter smaller features
+- Focus on aggregate distances instead of individual features
+
+### Slow Processing
+
+**Issue:** OpenStreetMap enrichment takes too long.
+
+**Solutions:**
+- Reduce the number of enabled feature types
+- Increase minimum size thresholds
+- Reduce `top_n` values
+- Process a smaller geographic area
+
+## Data Quality Notes
+
+<Warning>
+**OpenStreetMap Data Varies by Region**
+
+OSM data quality and completeness varies significantly by location. Urban areas typically have better coverage than rural areas. Always verify the features make sense for your locality.
+</Warning>
+
+<Note>
+**Feature Names May Be Missing**
+
+Not all OSM features have names. Unnamed features will be skipped when creating individual distance fields. This is normal and expected.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Census API" icon="landmark" href="/configuration/census-api">
+    Add demographic data enrichment
+  </Card>
+  <Card title="Settings Configuration" icon="gear" href="/configuration/settings">
+    Learn more about settings.json structure
+  </Card>
+  <Card title="Data Processing" icon="database" href="/guides/data-assembly">
+    Understand the data processing pipeline
+  </Card>
+  <Card title="Feature Engineering" icon="wand-magic-sparkles" href="/guides/feature-engineering">
+    Learn about feature engineering techniques
+  </Card>
+</CardGroup>

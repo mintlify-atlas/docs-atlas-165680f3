@@ -1,80 +1,423 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Build your first automated valuation model with OpenAVM Kit in under 10 minutes
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
+This tutorial walks you through creating a simple automated valuation model using OpenAVM Kit's synthetic data generator. You'll learn the core workflow: data preparation, model training, and evaluation.
 
-### Step 1: Set up your local environment
+<Note>
+  This tutorial uses synthetic data to demonstrate the workflow. For production use, you'll work with real assessment and sales data from your jurisdiction.
+</Note>
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- Python 3.11 or later installed
+- OpenAVM Kit installed (see [installation guide](/installation))
+- Basic familiarity with Python and pandas
+
+## Generate synthetic data
+
+Let's create a synthetic dataset to work with:
+
+<Steps>
+  <Step title="Import the synthetic data module">
+    ```python
+    from openavmkit.synthetic.basic import (
+        generate_inflation_curve,
+        generate_depreciation_curve,
+        SyntheticData
+    )
+    import pandas as pd
+    import numpy as np
+    ```
+
+    The `synthetic.basic` module provides tools for generating realistic property data with known ground truth values.
+  </Step>
+
+  <Step title="Create time-based curves">
+    ```python
+    # Generate land value inflation over time
+    time_land_mult = generate_inflation_curve(
+        start_year=2020,
+        end_year=2024,
+        annual_inflation_rate=0.05,
+        annual_inflation_rate_stdev=0.01,
+        seasonality_amplitude=0.20,
+        monthly_noise=0.05,
+        daily_noise=0.01
+    )
+
+    # Generate building depreciation curve
+    time_bldg_mult = generate_depreciation_curve(
+        lifetime=60,
+        weight_linear=0.2,
+        weight_logistic=0.8,
+        steepness=0.3,
+        inflection_point=20
+    )
+    ```
+
+    These curves simulate real-world market dynamics:
+    - **Inflation curve**: Land values trend upward with seasonal variation
+    - **Depreciation curve**: Building values decline with age using a blended linear/logistic model
+  </Step>
+
+  <Step title="Examine the curves">
+    ```python
+    import matplotlib.pyplot as plt
+
+    # Plot land inflation
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(time_land_mult)
+    plt.title('Land Value Inflation (2020-2024)')
+    plt.xlabel('Days')
+    plt.ylabel('Multiplier')
+
+    # Plot building depreciation
+    plt.subplot(1, 2, 2)
+    plt.plot(time_bldg_mult)
+    plt.title('Building Depreciation (60 years)')
+    plt.xlabel('Age (years)')
+    plt.ylabel('Remaining Value')
+    plt.tight_layout()
+    plt.show()
+    ```
+
+    This visualization helps verify the curves match realistic market behavior.
+  </Step>
+</Steps>
+
+## Build a simple ratio study
+
+Now let's evaluate assessment quality using OpenAVM Kit's ratio study tools:
+
+```python
+from openavmkit.ratio_study import RatioStudy
+import numpy as np
+
+# Simulate assessed values and sale prices
+np.random.seed(42)
+n_properties = 1000
+
+# Ground truth sale prices
+sale_prices = np.random.lognormal(mean=12.5, sigma=0.5, size=n_properties)
+
+# Assessed values with some error
+assessed_values = sale_prices * np.random.normal(loc=1.0, scale=0.15, size=n_properties)
+
+# Create ratio study
+rs = RatioStudy(
+    predictions=assessed_values,
+    ground_truth=sale_prices,
+    max_trim=0.25  # Allow trimming up to 25% of outliers
+)
+
+# Display key metrics
+print(f"Sample size: {rs.count}")
+print(f"Median ratio: {rs.median_ratio:.3f}")
+print(f"COD (Coefficient of Dispersion): {rs.cod:.3f}")
+print(f"PRD (Price-Related Differential): {rs.prd:.3f}")
+print(f"PRB (Price-Related Bias): {rs.prb:.3f}")
+```
+
+<Accordion title="Understanding ratio study metrics">
+  - **Median ratio**: Center of the assessment ratio distribution (target: 1.00)
+  - **COD**: Measures uniformity of assessments (lower is better, IAAO target: &lt;15 for residential)
+  - **PRD**: Detects assessment bias related to price levels (target: 0.98-1.03)
+  - **PRB**: More sensitive measure of vertical equity (target: -0.05 to 0.05)
+</Accordion>
+
+## Working with real data
+
+For production workflows, OpenAVM Kit uses a structured approach:
+
+### Initialize a notebook session
+
+```python
+from openavmkit.pipeline import init_notebook, load_settings
+
+# Set up the environment for a specific locality
+init_notebook(locality="us-nc-guilford")
+
+# Load configuration
+settings = load_settings("in/settings.json")
+```
+
+The `init_notebook()` function:
+- Sets up the working directory structure
+- Loads environment variables from `.env`
+- Configures logging and warnings
+- Creates a `NotebookState` object for session management
+
+### Load and process data
+
+```python
+from openavmkit.data import load_dataframe, process_data, SalesUniversePair
+
+# Load raw data
+df_parcels = load_dataframe("in/parcels.parquet")
+df_sales = load_dataframe("in/sales.parquet")
+
+# Create a SalesUniversePair object
+sup = SalesUniversePair(
+    universe=df_parcels,
+    sales=df_sales
+)
+
+# Process and enrich the data
+sup = process_data(
+    sup=sup,
+    settings=settings,
+    enrich_census=True,
+    enrich_osm=False
+)
+```
+
+The `SalesUniversePair` (SUP) is OpenAVM Kit's core data structure:
+- **universe**: All parcels in the jurisdiction
+- **sales**: Sales transactions for model training/testing
+
+### Train a model
+
+```python
+from openavmkit.modeling import fit_model
+from openavmkit.utilities.modeling import XGBoostModel
+
+# Define model configuration
+model_config = {
+    "type": "xgboost",
+    "features": [
+        "land_area_sf",
+        "building_area_sf",
+        "year_built",
+        "bedrooms",
+        "bathrooms"
+    ],
+    "target": "sale_price"
+}
+
+# Fit the model
+model = fit_model(
+    sup=sup,
+    settings=settings,
+    model_type=XGBoostModel,
+    features=model_config["features"]
+)
+
+# Generate predictions
+sup.sales["predicted_value"] = model.predict(sup.sales)
+```
+
+### Evaluate performance
+
+```python
+from openavmkit.ratio_study import RatioStudy
+
+# Create ratio study from predictions
+rs = RatioStudy(
+    predictions=sup.sales["predicted_value"].values,
+    ground_truth=sup.sales["sale_price"].values,
+    max_trim=0.25
+)
+
+# Display metrics
+print(f"Model Performance:")
+print(f"  Median Ratio: {rs.median_ratio:.3f}")
+print(f"  COD: {rs.cod:.2f}")
+print(f"  PRD: {rs.prd:.3f}")
+print(f"  PRB: {rs.prb:.3f}")
+
+# Check IAAO standards
+if rs.cod < 15.0 and 0.98 <= rs.prd <= 1.03:
+    print("✓ Model meets IAAO standards for residential assessments")
+else:
+    print("✗ Model needs improvement to meet IAAO standards")
+```
+
+## Download example data
+
+OpenAVM Kit includes a public dataset for learning. Here's how to download it:
+
+<Steps>
+  <Step title="Create locality structure">
+    ```bash
+    # Navigate to your notebooks directory
+    cd notebooks/pipeline/data
+
+    # Create folder for the example locality
+    mkdir us-nc-guilford
+    cd us-nc-guilford
+    ```
+  </Step>
+
+  <Step title="Configure cloud access">
+    Create `cloud.json` with public dataset credentials:
+
+    ```json
+    {
+      "type": "azure",
+      "azure_storage_container_url": "https://landeconomics.blob.core.windows.net/localities-public"
+    }
+    ```
+
+    <Note>
+      This is a public container - no authentication required!
+    </Note>
+  </Step>
+
+  <Step title="Sync data">
+    In a Jupyter notebook:
+
+    ```python
+    from openavmkit.pipeline import init_notebook
+    from openavmkit.cloud.cloud import cloud_sync
+
+    # Initialize for the example locality
+    init_notebook(locality="us-nc-guilford")
+
+    # Download data from cloud
+    cloud_sync()
+    ```
+
+    This creates two folders:
+    - `in/` - Input files including `settings.json`
+    - `out/` - Output files from your analysis
+  </Step>
+
+  <Step title="Run the pipeline">
+    Open `notebooks/pipeline/01-assemble.ipynb` and run the cells to:
+    - Load and validate the data
+    - Perform initial data quality checks
+    - Prepare features for modeling
+
+    Continue with subsequent notebooks:
+    - `02-clean.ipynb` - Data cleaning and filtering
+    - `03-model.ipynb` - Model training and evaluation
+    - `assessment_quality.ipynb` - Comprehensive quality analysis
+  </Step>
+</Steps>
+
+## Key concepts
+
+<CardGroup cols={2}>
+  <Card title="SalesUniversePair" icon="layer-group">
+    Core data structure containing both the parcel universe and sales observations, enabling consistent operations across the entire workflow.
+  </Card>
+  <Card title="Settings dictionary" icon="gear">
+    JSON configuration defining field mappings, feature specifications, modeling parameters, and locality-specific settings.
+  </Card>
+  <Card title="Ratio studies" icon="chart-line">
+    IAAO-standard statistical analysis measuring assessment quality through metrics like COD, PRD, and PRB.
+  </Card>
+  <Card title="Pipeline functions" icon="diagram-project">
+    High-level functions in `openavmkit.pipeline` that orchestrate common workflows for data processing, modeling, and reporting.
+  </Card>
+</CardGroup>
+
+## Common workflows
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
+  <Accordion title="Time adjustment for sales">
+    ```python
+    from openavmkit.time_adjustment import enrich_time_adjustment
+
+    # Adjust sale prices to a common date
+    sup = enrich_time_adjustment(
+        sup=sup,
+        settings=settings,
+        valuation_date="2024-01-01"
+    )
+    ```
+
+    Time adjustment normalizes sale prices to a valuation date, accounting for market appreciation.
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+
+  <Accordion title="Sales scrutiny and filtering">
+    ```python
+    from openavmkit.sales_scrutiny_study import run_sales_scrutiny_per_model_group
+    from openavmkit.cleaning import filter_invalid_sales
+
+    # Identify problematic sales
+    sup = run_sales_scrutiny_per_model_group(
+        sup=sup,
+        settings=settings
+    )
+
+    # Remove invalid transactions
+    sup = filter_invalid_sales(sup, settings)
+    ```
+
+    Sales scrutiny detects outliers, non-arm's-length transactions, and data errors.
+  </Accordion>
+
+  <Accordion title="Model comparison">
+    ```python
+    from openavmkit.utilities.modeling import XGBoostModel, LightGBMModel, CatBoostModel
+
+    models = {
+        "XGBoost": XGBoostModel,
+        "LightGBM": LightGBMModel,
+        "CatBoost": CatBoostModel
+    }
+
+    results = {}
+    for name, model_class in models.items():
+        model = fit_model(sup, settings, model_class, features)
+        predictions = model.predict(sup.sales)
+        rs = RatioStudy(predictions, sup.sales["sale_price"], max_trim=0.25)
+        results[name] = {"cod": rs.cod, "prd": rs.prd}
+
+    # Compare models
+    import pandas as pd
+    df_comparison = pd.DataFrame(results).T
+    print(df_comparison)
+    ```
+
+    Test multiple algorithms to find the best fit for your data.
+  </Accordion>
+
+  <Accordion title="Spatial analysis">
+    ```python
+    from openavmkit.utilities.data import calc_spatial_lag
+
+    # Calculate spatial lag of sale prices
+    sup.sales["spatial_lag_price"] = calc_spatial_lag(
+        gdf=sup.sales,
+        values=sup.sales["sale_price"],
+        k_neighbors=10,
+        bandwidth=1000  # meters
+    )
+
+    # Use as a feature
+    features.append("spatial_lag_price")
+    ```
+
+    Spatial lag captures neighborhood effects by averaging nearby property values.
   </Accordion>
 </AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+<Steps>
+  <Step title="Explore the notebooks">
+    Work through the complete pipeline notebooks in `notebooks/pipeline/` to see the full workflow in action.
+  </Step>
+  <Step title="Review the API documentation">
+    Browse the [API reference](/api/pipeline) to understand available functions and their parameters.
+  </Step>
+  <Step title="Customize for your data">
+    Create a new locality folder with your jurisdiction's data and adapt the settings file to match your schema.
+  </Step>
+  <Step title="Build production models">
+    Use the checkpoint system and cloud sync features to build robust, reproducible modeling pipelines.
+  </Step>
+</Steps>
 
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
+<Card title="Need help?" icon="circle-question" href="https://github.com/larsiusprime/openavmkit/discussions">
+  Join the discussion on GitHub for questions and support
 </Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

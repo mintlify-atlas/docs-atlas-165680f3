@@ -1,0 +1,108 @@
+---
+title: Localities
+description: Understanding localities in OpenAVM Kit - geographic areas, folder structure, and naming conventions
+---
+
+## What is a locality?
+
+OpenAVM Kit operates on the concept of a **locality**, which is a geographic area that contains a set of properties. This can represent a city, a county, a neighborhood, or any other region or jurisdiction you want to analyze.
+
+<Info>
+A locality is the fundamental organizational unit in OpenAVM Kit. All data processing, modeling, and analysis happens within the context of a specific locality.
+</Info>
+
+## Folder structure
+
+Each locality requires a specific folder structure within OpenAVM Kit's `notebooks/pipeline/` directory:
+
+```
+notebooks/
+├──pipeline/
+   ├──data/
+      ├──<locality_slug>/
+         ├── in/
+             ├── settings.json
+         ├── out/
+```
+
+<Accordion title="Directory purposes">
+- **`in/`**: Contains your raw data files and configuration
+- **`out/`**: Where OpenAVM Kit writes output files after processing
+- **`settings.json`**: Drives all your modeling and analysis decisions
+</Accordion>
+
+### Initial setup
+
+For a new locality, create a minimal `settings.json` file:
+
+```json
+{}
+```
+
+This empty configuration will be sufficient to get started, but you'll want to consult the documentation and tutorials for how to properly configure this file.
+
+## Naming conventions
+
+### The locality slug format
+
+Locality slugs follow a specific, opinionated format:
+
+```
+<country_code>-<state_or_province_code>-<locality_name>
+```
+
+<Note>
+The slug must be all lowercase and contain no spaces or special characters other than underscores. Dashes are used only to separate the three main components.
+</Note>
+
+### Format components
+
+**Country code**
+
+The 2-letter country code according to the [ISO 3166-1 standard](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+
+- United States: `us`
+- Norway: `no`
+- Canada: `ca`
+
+**State/province code**
+
+The 2-letter state or province code according to the [ISO 3166-2 standard](https://en.wikipedia.org/wiki/ISO_3166-2).
+
+- Texas: `tx`
+- California: `ca`
+- New York: `ny`
+- Oslo: `03`
+
+**Locality name**
+
+A human-readable name for the locality itself. This follows no particular standard and is entirely up to you.
+
+<Warning>
+Do not use dashes within individual components. For multi-word locality names, use underscores or remove spaces entirely.
+
+- Good: `us-ny-new_york_city`, `us-ny-nyc`, `us-ny-newyorkcity`
+- Bad: `us-ny-new-york-city`
+</Warning>
+
+### Examples
+
+```
+us-nc-guilford    # Guilford County, North Carolina, USA
+us-tx-austin      # City of Austin, Texas, USA
+no-03-oslo        # City of Oslo, Norway
+no-50-orkdal      # Orkdal kommune (county), Norway
+```
+
+## Working with localities
+
+Once you have your locality set up with the correct folder structure and naming convention, you can begin:
+
+1. Loading raw data into the `in/` directory
+2. Configuring your `settings.json` file
+3. Running the OpenAVM Kit pipeline notebooks
+4. Viewing results in the `out/` directory
+
+<Info>
+See the [Workflows](/concepts/workflows) page for details on the typical data processing pipeline for a locality.
+</Info>

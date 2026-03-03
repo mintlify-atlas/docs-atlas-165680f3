@@ -1,0 +1,246 @@
+---
+title: "census"
+description: "US Census API integration for demographic data enrichment"
+---
+
+The `census` module provides utilities for retrieving demographic data and geographic boundaries from the US Census Bureau API, including block group enrichment for property valuation models.
+
+## Service Classes
+
+### CensusCredentials
+
+Object for storing US Census API credentials.
+
+```python
+from openavmkit.utilities.census import CensusCredentials
+
+credentials = CensusCredentials(api_key='your_census_api_key')
+```
+
+<ParamField path="api_key" type="str" required>
+  API Key for the US Census
+</ParamField>
+
+---
+
+### CensusService
+
+Provides functions for downloading data from the US Census.
+
+```python
+from openavmkit.utilities.census import CensusService, CensusCredentials
+
+credentials = CensusCredentials(api_key='your_api_key')
+service = CensusService(credentials)
+```
+
+<ParamField path="credentials" type="CensusCredentials" required>
+  Credentials for the US Census
+</ParamField>
+
+---
+
+## Census Data Retrieval
+
+### get_census_data()
+
+Get Census demographic data for block groups in a given FIPS code.
+
+```python
+from openavmkit.utilities.census import CensusService
+
+df = service.get_census_data(
+    fips_code='06001',
+    year=2022,
+    census_settings=None
+)
+```
+
+<ParamField path="fips_code" type="str" required>
+  5-digit FIPS code (state + county)
+</ParamField>
+
+<ParamField path="year" type="int" default="2022">
+  Census year to query
+</ParamField>
+
+<ParamField path="census_settings" type="dict" default="None">
+  Census settings dictionary
+</ParamField>
+
+<ResponseField name="df" type="pd.DataFrame">
+  DataFrame containing Census demographic data with columns:
+  - `median_income`: Median household income
+  - `total_population`: Total population
+  - `median_g_rent`: Median gross rent
+  - `median_c_rent`: Median contract rent
+  - `std_geoid`: Standardized GEOID (state + county + tract + block group)
+  - Various FIPS component fields
+</ResponseField>
+
+---
+
+### get_census_blockgroups_shapefile()
+
+Get Census Block Group shapefiles for a given FIPS code from the Census TIGERweb service.
+
+```python
+gdf = service.get_census_blockgroups_shapefile(fips_code='06001')
+```
+
+<ParamField path="fips_code" type="str" required>
+  5-digit FIPS code (state + county)
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  GeoDataFrame containing Census Block Group boundaries with:
+  - `geometry`: Polygon geometries in EPSG:4326
+  - `std_geoid`: Standardized GEOID
+  - FIPS component fields (state_fips, county_fips, tract_fips, bg_fips)
+</ResponseField>
+
+---
+
+### get_census_data_with_boundaries()
+
+Get both Census demographic data and boundary files for block groups in a FIPS code.
+
+```python
+census_data, census_boundaries = service.get_census_data_with_boundaries(
+    fips_code='06001',
+    year=2022,
+    census_settings=None
+)
+```
+
+<ParamField path="fips_code" type="str" required>
+  5-digit FIPS code (state + county)
+</ParamField>
+
+<ParamField path="year" type="int" default="2022">
+  Census year to query
+</ParamField>
+
+<ParamField path="census_settings" type="dict" default="None">
+  Census settings object
+</ParamField>
+
+<ResponseField name="return" type="Tuple[pd.DataFrame, gpd.GeoDataFrame]">
+  Tuple containing:
+  - Census demographic data DataFrame
+  - Census Block Group boundaries GeoDataFrame (merged with demographic data)
+</ResponseField>
+
+---
+
+## Spatial Matching
+
+### match_to_census_blockgroups()
+
+Match each row in a GeoDataFrame to its corresponding Census Block Group using spatial join.
+
+```python
+from openavmkit.utilities.census import match_to_census_blockgroups
+
+enriched_gdf = match_to_census_blockgroups(
+    gdf=parcels_gdf,
+    census_gdf=census_boundaries,
+    join_type='left'
+)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  Input GeoDataFrame to match (must have a `geometry` column)
+</ParamField>
+
+<ParamField path="census_gdf" type="gpd.GeoDataFrame" required>
+  Census Block Group boundaries GeoDataFrame
+</ParamField>
+
+<ParamField path="join_type" type="str" default="'left'">
+  Type of join to perform: `'left'`, `'right'`, `'inner'`, or `'outer'`
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  Input GeoDataFrame with Census Block Group data appended, including:
+  - `std_geoid`: Census block group ID
+  - `median_income`: Median household income
+  - `total_population`: Total population
+  - Other demographic fields from the census data
+  
+  Uses centroid-based matching in an equal-area projection for accuracy.
+</ResponseField>
+
+---
+
+## Initialization Functions
+
+### init_service_census()
+
+Initialize a Census service with the provided credentials.
+
+```python
+from openavmkit.utilities.census import init_service_census, CensusCredentials
+
+credentials = CensusCredentials(api_key='your_api_key')
+service = init_service_census(credentials)
+```
+
+<ParamField path="credentials" type="CensusCredentials" required>
+  Census API credentials
+</ParamField>
+
+<ResponseField name="service" type="CensusService">
+  Initialized Census service
+</ResponseField>
+
+---
+
+### get_creds_from_env_census()
+
+Get Census credentials from environment variables.
+
+```python
+from openavmkit.utilities.census import get_creds_from_env_census
+import os
+
+os.environ['CENSUS_API_KEY'] = 'your_api_key'
+credentials = get_creds_from_env_census()
+```
+
+<ResponseField name="credentials" type="CensusCredentials">
+  Census API credentials loaded from the `CENSUS_API_KEY` environment variable. Returns `None` with a warning if the environment variable is not set.
+</ResponseField>
+
+---
+
+## Usage Example
+
+```python
+import os
+from openavmkit.utilities.census import (
+    get_creds_from_env_census,
+    init_service_census,
+    match_to_census_blockgroups
+)
+
+# Set up credentials
+os.environ['CENSUS_API_KEY'] = 'your_census_api_key'
+credentials = get_creds_from_env_census()
+service = init_service_census(credentials)
+
+# Get census data with boundaries
+census_data, census_boundaries = service.get_census_data_with_boundaries(
+    fips_code='06001',  # Alameda County, CA
+    year=2022
+)
+
+# Match parcels to census block groups
+enriched_parcels = match_to_census_blockgroups(
+    gdf=parcels_gdf,
+    census_gdf=census_boundaries,
+    join_type='left'
+)
+
+print(f"Enriched with median income: {enriched_parcels['median_income'].notna().sum()} parcels")
+```

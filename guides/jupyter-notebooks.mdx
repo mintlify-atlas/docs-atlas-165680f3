@@ -1,0 +1,495 @@
+---
+title: Jupyter Notebooks
+description: Complete workflow guide for using OpenAVM Kit's interactive notebooks
+---
+
+OpenAVM Kit provides pre-built Jupyter notebooks that guide you through the entire property valuation workflow. These notebooks offer an interactive, step-by-step approach to data processing, cleaning, and modeling.
+
+## Notebook Overview
+
+The `notebooks/pipeline/` directory contains the core workflow notebooks:
+
+<CardGroup cols={3}>
+  <Card title="01-assemble" icon="database">
+    Load and merge data sources into a unified structure
+  </Card>
+  <Card title="02-clean" icon="broom">
+    Validate sales and prepare data for modeling
+  </Card>
+  <Card title="03-model" icon="brain">
+    Train models and generate valuations
+  </Card>
+</CardGroup>
+
+Additional notebooks in `notebooks/examples/` demonstrate specific use cases:
+
+- **`synthetic_city.ipynb`**: Work with simulated data
+- **`land_value.ipynb`**: Focus on land valuation techniques
+
+## Getting Started
+
+### Installing Jupyter
+
+If you haven't already installed Jupyter:
+
+```bash
+pip install jupyter
+```
+
+### Launching Jupyter
+
+Start the Jupyter notebook server:
+
+```bash getting_started.md:142-146
+jupyter notebook
+```
+
+This opens a browser tab showing your project directory.
+
+<Note>
+Jupyter runs a local web server. Keep the terminal window open while working with notebooks.
+</Note>
+
+### Opening a Notebook
+
+<Steps>
+
+### Navigate to the notebooks directory
+
+Click through: `notebooks` → `pipeline`
+
+### Select a notebook
+
+Double-click `01-assemble.ipynb` to open it
+
+### Configure your locality
+
+Edit the first code cell:
+
+```python 01-assemble.ipynb:48-51
+# The slug of the locality you are currently working on
+locality = "us-nc-guilford"
+
+# Whether to print out a lot of stuff (can help with debugging)
+verbose = True
+```
+
+### Run cells sequentially
+
+Press `Shift + Enter` to execute each cell in order
+
+</Steps>
+
+## Notebook 1: Assemble
+
+The assembly notebook loads and processes raw data files.
+
+### What It Does
+
+<Steps>
+
+### Initializes the environment
+
+```python 01-assemble.ipynb:114-115
+init_notebook(locality)
+```
+
+Sets up working directory and loads configuration.
+
+### Syncs with cloud (optional)
+
+```python 01-assemble.ipynb:147-148
+cloud_sync(locality, verbose=True)
+```
+
+Downloads/uploads data from configured cloud storage.
+
+### Loads all dataframes
+
+```python 01-assemble.ipynb:176-181
+dataframes = from_checkpoint("1-assemble-01-load_dataframes", load_dataframes,
+    {
+        "settings": load_settings(),
+        "verbose": verbose
+    }
+)
+```
+
+Reads CSV, Parquet, and geospatial files defined in settings.
+
+### Processes into SalesUniversePair
+
+```python 01-assemble.ipynb:193-200
+sales_univ_pair = from_checkpoint("1-assemble-02-process_data", process_dataframes,
+    {
+        "dataframes": dataframes,
+        "settings": load_settings(), 
+        "verbose": verbose
+    }
+)
+```
+
+Merges dataframes and enriches with calculated fields.
+
+### Enriches with street data
+
+```python 01-assemble.ipynb:210-217
+sales_univ_pair = from_checkpoint("1-assemble-03-enrich_streets", enrich_sup_streets,
+    {
+        "sup": sales_univ_pair,
+        "settings":load_settings(), 
+        "verbose":verbose
+    }
+)
+```
+
+Calculates frontage, depth, and distance to roads using OpenStreetMap.
+
+<Warning>
+Street enrichment can be computationally intensive for large datasets. It may take significant time and memory.
+</Warning>
+
+### Tags model groups
+
+```python 01-assemble.ipynb:300-306
+sales_univ_pair = from_checkpoint("1-assemble-04-tag_modeling_groups", tag_model_groups_sup,
+    {
+        "sup": sales_univ_pair, 
+        "settings": load_settings(), 
+        "verbose": verbose
+    }
+)
+```
+
+Assigns each parcel to a model group (e.g., single-family, commercial).
+
+### Writes output files
+
+```python 01-assemble.ipynb:324-330
+write_notebook_output_sup(
+    sales_univ_pair, 
+    "1-assemble", 
+    parquet=True, 
+    gpkg=False, 
+    shp=False
+)
+```
+
+Saves results to `out/` directory in various formats.
+
+</Steps>
+
+### Key Outputs
+
+- `out/1-assemble-sup.pickle` - Complete SalesUniversePair object
+- `out/look/1-assemble-universe.parquet` - Universe dataframe
+- `out/look/1-assemble-sales-hydrated.parquet` - Sales with characteristics
+
+<Tip>
+Load the parquet files in QGIS or ArcGIS to visually inspect your data on a map.
+</Tip>
+
+## Notebook 2: Clean
+
+The cleaning notebook validates sales and fills data gaps.
+
+### What It Does
+
+<Steps>
+
+### Loads assembled data
+
+```python 02-clean.ipynb:155-156
+sales_univ_pair = read_pickle("out/1-assemble-sup")
+```
+
+### Fills unknown values
+
+```python 02-clean.ipynb:490-491
+sales_univ_pair = fill_unknown_values_sup(sales_univ_pair, settings)
+```
+
+Replaces missing data with configured defaults.
+
+### Marks clustering IDs
+
+```python 02-clean.ipynb:526-532
+sales_univ_pair = mark_horizontal_equity_clusters_per_model_group_sup(
+    sup=sales_univ_pair,
+    settings=settings,
+    verbose=verbose
+)
+```
+
+Groups similar properties for equity analysis.
+
+### Processes and validates sales
+
+```python
+sales_univ_pair = process_sales(
+    sup=sales_univ_pair,
+    settings=settings,
+    verbose=verbose
+)
+```
+
+Filters by date range, validates prices, applies time adjustments.
+
+### Runs sales scrutiny
+
+```python
+sales_univ_pair = run_sales_scrutiny(
+    sup=sales_univ_pair,
+    settings=settings,
+    drop_cluster_outliers=False,
+    drop_heuristic_outliers=True,
+    verbose=verbose
+)
+```
+
+Identifies and optionally removes outlier sales.
+
+### Writes cleaned data
+
+```python
+write_notebook_output_sup(
+    sales_univ_pair,
+    "2-clean",
+    parquet=True
+)
+```
+
+</Steps>
+
+### Key Outputs
+
+- `out/2-clean-sup.pickle` - Cleaned SalesUniversePair
+- `out/sales_scrutiny/` - Sales scrutiny reports
+- `out/look/2-clean-sales-hydrated.parquet` - Cleaned sales
+
+## Notebook 3: Model
+
+The modeling notebook trains algorithms and generates valuations.
+
+### What It Does
+
+<Steps>
+
+### Loads cleaned data
+
+```python 03-model.ipynb:136-137
+sales_univ_pair = load_cleaned_data_for_modeling(settings)
+```
+
+### Splits train/test sets
+
+```python 03-model.ipynb:168-172
+write_canonical_splits(
+    sales_univ_pair,
+    load_settings(),
+    verbose=verbose
+)
+```
+
+Creates durable 80/20 train/test split.
+
+### Enriches with spatial lag
+
+```python 03-model.ipynb:182-188
+sales_univ_pair = from_checkpoint("3-model-00-enrich-spatial-lag", enrich_sup_spatial_lag,
+    {
+        "sup": sales_univ_pair,
+        "settings": load_settings(),
+        "verbose": verbose
+    }
+)
+```
+
+Calculates spatially-weighted averages of nearby sales.
+
+### Experiments with models
+
+```python 03-model.ipynb:244-256
+try_models(
+    sup=sales_univ_pair,
+    settings=load_settings(),
+    save_params=True,
+    verbose=verbose,
+    run_main=True,
+    run_vacant=False,
+    run_hedonic=False,
+    run_ensemble=True,
+    do_shaps=False,
+    do_plots=True
+)
+```
+
+Quickly tests different algorithms and variables.
+
+### Identifies outliers
+
+```python 03-model.ipynb:278-281
+identify_outliers(
+    sup=sales_univ_pair,
+    settings=load_settings()
+)
+```
+
+Finds sales with poor prediction accuracy.
+
+### Finalizes models
+
+```python 03-model.ipynb:301-309
+results = from_checkpoint("3-model-02-finalize-models", finalize_models,
+    {
+        "sup": sales_univ_pair,
+        "settings": load_settings(),
+        "save_params": True,
+        "use_saved_params": True,
+        "verbose": verbose
+    }
+)
+```
+
+Trains production models and saves all predictions.
+
+### Generates reports
+
+```python 03-model.ipynb:327-328
+run_and_write_ratio_study_breakdowns(load_settings())
+```
+
+Creates statistical assessment quality reports.
+
+</Steps>
+
+### Key Outputs
+
+- `out/models/{model_group}/{model_type}/{algorithm}/` - Model files and predictions
+- `out/canonical_splits/` - Train/test split definitions
+- `out/ratio_studies/` - Performance reports
+
+## Checkpointing System
+
+Notebooks use checkpointing to save intermediate results:
+
+```python
+result = from_checkpoint("checkpoint-name", function_name, params)
+```
+
+**Benefits:**
+- Skip time-consuming steps on re-runs
+- Resume work after interruptions
+- Experiment without re-processing everything
+
+**Clearing checkpoints:**
+
+```python
+if clear_checkpoints:
+    delete_checkpoints("1-assemble")
+```
+
+Set `clear_checkpoints = True` to force fresh execution.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Run cells in order">
+    Always run notebook cells sequentially from top to bottom. Skipping cells or running out of order can cause errors.
+  </Accordion>
+  
+  <Accordion title="Clear outputs before switching localities">
+    Use "Kernel → Restart & Clear Output" when changing the `locality` variable to avoid mixing data.
+  </Accordion>
+  
+  <Accordion title="Save frequently">
+    Jupyter auto-saves, but manually save (Ctrl+S / Cmd+S) before running long operations.
+  </Accordion>
+  
+  <Accordion title="Monitor memory usage">
+    Large datasets can exhaust memory. Close unnecessary notebooks and restart kernels periodically.
+  </Accordion>
+  
+  <Accordion title="Use verbose mode during development">
+    Set `verbose = True` to see detailed progress. Turn off for production runs.
+  </Accordion>
+  
+  <Accordion title="Examine outputs visually">
+    Load output parquet files in GIS software after each notebook to verify spatial accuracy.
+  </Accordion>
+</AccordionGroup>
+
+## Customizing Notebooks
+
+You can modify notebooks to fit your workflow:
+
+### Adding custom processing
+
+```python
+# Add a new cell with your custom logic
+def custom_enrichment(sup, settings):
+    df = sup.universe.copy()
+    # Your custom calculations here
+    df['custom_field'] = df['field1'] * df['field2']
+    sup.universe = df
+    return sup
+
+sales_univ_pair = custom_enrichment(sales_univ_pair, settings)
+```
+
+### Creating new notebooks
+
+Base new notebooks on the existing structure:
+
+1. Copy an existing notebook
+2. Rename appropriately
+3. Modify the workflow steps
+4. Update checkpoint names to avoid conflicts
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Kernel died / memory error">
+    Your dataset may be too large for available RAM. Try:
+    - Restart kernel and clear outputs
+    - Close other applications
+    - Process smaller subsets
+    - Use a machine with more memory
+  </Accordion>
+  
+  <Accordion title="ModuleNotFoundError">
+    OpenAVM Kit isn't installed or not in the kernel's path:
+    ```bash
+    pip install -e .
+    ```
+    Then restart the kernel.
+  </Accordion>
+  
+  <Accordion title="Checkpoint loading errors">
+    Delete corrupted checkpoints:
+    ```python
+    delete_checkpoints("problematic-checkpoint-prefix")
+    ```
+  </Accordion>
+  
+  <Accordion title="Settings not loading">
+    Verify `in/settings.json` exists and contains valid JSON. Use a JSON validator to check syntax.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating a Locality" icon="map" href="/guides/creating-locality">
+    Set up a new locality from scratch
+  </Card>
+  <Card title="Data Assembly" icon="database" href="/guides/data-assembly">
+    Deep dive into data loading and processing
+  </Card>
+  <Card title="Modeling Guide" icon="brain" href="/guides/modeling">
+    Advanced modeling techniques and configuration
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/pipeline">
+    Complete function reference documentation
+  </Card>
+</CardGroup>

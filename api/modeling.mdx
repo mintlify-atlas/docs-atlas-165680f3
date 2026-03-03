@@ -1,0 +1,608 @@
+---
+title: "Modeling"
+description: "Machine learning model training and prediction functions"
+---
+
+The `modeling` module provides functions for training and evaluating various predictive models including MRA, XGBoost, LightGBM, CatBoost, GWR, and more.
+
+## Core Classes
+
+### DataSplit
+
+Encapsulates the splitting of data into training, test, and other subsets.
+
+```python
+from openavmkit.modeling import DataSplit
+
+ds = DataSplit(
+    name="residential",
+    df_sales=df_sales,
+    df_universe=df_universe,
+    model_group="residential",
+    settings=settings,
+    dep_var="sale_price",
+    dep_var_test="sale_price",
+    ind_vars=independent_vars,
+    categorical_vars=categorical_vars,
+    interactions={},
+    test_keys=test_keys,
+    train_keys=train_keys
+)
+```
+
+#### Attributes
+
+- `df_sales` - Sales data after processing
+- `df_universe` - Universe (parcel) data after processing
+- `df_train` - Training subset of sales data
+- `df_test` - Test subset of sales data
+- `X_train` - Feature matrix for the training data
+- `X_test` - Feature matrix for the test data
+- `X_univ` - Feature matrix for the universe data
+- `y_train` - Target array for training
+- `y_test` - Target array for testing
+
+### SingleModelResults
+
+Container for results from a single prediction model.
+
+#### Attributes
+
+- `ds` - The DataSplit object used
+- `df_universe` - Universe DataFrame with predictions
+- `df_test` - Test DataFrame with predictions
+- `df_sales` - Sales DataFrame with predictions
+- `model_name` - Model name (unique identifier)
+- `model_engine` - Model engine ("xgboost", "mra", etc.)
+- `model` - The fitted model object
+- `pred_test` - PredictionResults for the test set
+- `pred_train` - PredictionResults for the training set
+- `pred_sales` - PredictionResults for the sales set
+- `chd` - Calculated CHD (coefficient of horizontal disparity) value
+- `utility_test` - Composite utility score for the test set
+- `utility_train` - Composite utility score for the training set
+
+### PredictionResults
+
+Container for prediction results and associated performance metrics.
+
+#### Attributes
+
+- `dep_var` - The independent variable used for prediction
+- `ind_vars` - List of dependent variables
+- `y` - Ground truth values
+- `y_pred` - Predicted values
+- `mse` - Mean squared error
+- `rmse` - Root mean squared error
+- `mape` - Mean absolute percent error
+- `r2` - R-squared
+- `adj_r2` - Adjusted R-squared
+- `ratio_study` - RatioStudy object
+
+## Multiple Regression Analysis (MRA)
+
+### run_mra()
+
+Train an MRA model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_mra
+
+results = run_mra(
+    ds,
+    intercept=True,
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="intercept" type="bool" default="True">
+  Whether to include an intercept in the model
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="model" type="MRAModel | None" default="None">
+  Optional pre-trained MRAModel
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the MRA model
+</ResponseField>
+
+### run_multi_mra()
+
+Train a hierarchical Multi-MRA model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_multi_mra
+
+results = run_multi_mra(
+    ds,
+    outpath="out/models/residential",
+    location_fields=["neighborhood", "city"],
+    optimize_vars=False,
+    intercept=True,
+    verbose=True,
+    min_sample_size=15
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object (sales/universe/splits should already be set up)
+</ParamField>
+
+<ParamField path="outpath" type="str" required>
+  Path to write parameters out to
+</ParamField>
+
+<ParamField path="location_fields" type="list[str]" required>
+  Ordered list of location field names, most specific to least specific
+</ParamField>
+
+<ParamField path="optimize_vars" type="bool" default="False">
+  Whether to automatically trim the variable selection to the most optimal
+</ParamField>
+
+<ParamField path="intercept" type="bool" default="True">
+  Whether to include an intercept column in the regression
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, print verbose output
+</ParamField>
+
+<ParamField path="min_sample_size" type="int" default="15">
+  Minimum number of observations required to fit a local OLS model
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the Multi-MRA model
+</ResponseField>
+
+## Tree-Based Models
+
+### run_xgboost()
+
+Train an XGBoost model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_xgboost
+
+results = run_xgboost(
+    ds,
+    outpath="out/models/residential",
+    use_saved_params=True,
+    save_params=True,
+    tune_params=False,
+    verbose=True,
+    params={
+        "max_depth": 6,
+        "learning_rate": 0.1,
+        "n_estimators": 100,
+        "objective": "reg:squarederror"
+    }
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="outpath" type="str" required>
+  Path to save/load parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Whether to use saved parameters if available
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="True">
+  Whether to save parameters after training
+</ParamField>
+
+<ParamField path="tune_params" type="bool" default="False">
+  Whether to perform hyperparameter tuning
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="params" type="dict" default="None">
+  Optional dictionary of hyperparameters
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the XGBoost model
+</ResponseField>
+
+### run_lightgbm()
+
+Train a LightGBM model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_lightgbm
+
+results = run_lightgbm(
+    ds,
+    outpath="out/models/residential",
+    use_saved_params=True,
+    save_params=True,
+    tune_params=False,
+    verbose=True,
+    params={
+        "num_leaves": 31,
+        "learning_rate": 0.1,
+        "n_estimators": 100,
+        "objective": "regression"
+    }
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="outpath" type="str" required>
+  Path to save/load parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Whether to use saved parameters if available
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="True">
+  Whether to save parameters after training
+</ParamField>
+
+<ParamField path="tune_params" type="bool" default="False">
+  Whether to perform hyperparameter tuning
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="params" type="dict" default="None">
+  Optional dictionary of hyperparameters
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the LightGBM model
+</ResponseField>
+
+### run_catboost()
+
+Train a CatBoost model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_catboost
+
+results = run_catboost(
+    ds,
+    outpath="out/models/residential",
+    use_saved_params=True,
+    save_params=True,
+    tune_params=False,
+    verbose=True,
+    params={
+        "depth": 6,
+        "learning_rate": 0.1,
+        "iterations": 100,
+        "loss_function": "RMSE"
+    }
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="outpath" type="str" required>
+  Path to save/load parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Whether to use saved parameters if available
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="True">
+  Whether to save parameters after training
+</ParamField>
+
+<ParamField path="tune_params" type="bool" default="False">
+  Whether to perform hyperparameter tuning
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="params" type="dict" default="None">
+  Optional dictionary of hyperparameters
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the CatBoost model
+</ResponseField>
+
+## Geographically Weighted Regression (GWR)
+
+### run_gwr()
+
+Train a GWR model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_gwr
+
+results = run_gwr(
+    ds,
+    outpath="out/models/residential",
+    use_saved_params=True,
+    save_params=True,
+    tune_params=False,
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="outpath" type="str" required>
+  Path to save/load parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Whether to use saved bandwidth if available
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="True">
+  Whether to save bandwidth after training
+</ParamField>
+
+<ParamField path="tune_params" type="bool" default="False">
+  Whether to perform bandwidth selection
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the GWR model
+</ResponseField>
+
+## Spatial Models
+
+### run_spatial_lag()
+
+Train a spatial lag model and return its prediction results.
+
+```python
+from openavmkit.modeling import run_spatial_lag
+
+results = run_spatial_lag(
+    ds,
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the spatial lag model
+</ResponseField>
+
+## Baseline Models
+
+### run_average()
+
+Train an average model (baseline) and return its prediction results.
+
+```python
+from openavmkit.modeling import run_average
+
+results = run_average(
+    ds,
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the average model
+</ResponseField>
+
+### run_naive_area()
+
+Train a naive area model (baseline using simple $/sqft) and return its prediction results.
+
+```python
+from openavmkit.modeling import run_naive_area
+
+results = run_naive_area(
+    ds,
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the naive area model
+</ResponseField>
+
+### run_local_area()
+
+Train a local area model (location-based $/sqft) and return its prediction results.
+
+```python
+from openavmkit.modeling import run_local_area
+
+results = run_local_area(
+    ds,
+    location_field="neighborhood",
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="location_field" type="str" required>
+  Field name to use for location grouping
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the local area model
+</ResponseField>
+
+### run_pass_through()
+
+Generate predictions using a pass-through model (e.g., assessor values).
+
+```python
+from openavmkit.modeling import run_pass_through
+
+results = run_pass_through(
+    ds,
+    model_engine="assessor",
+    verbose=True
+)
+```
+
+<ParamField path="ds" type="DataSplit" required>
+  DataSplit object
+</ParamField>
+
+<ParamField path="model_engine" type="str" required>
+  Model engine identifier (e.g., "assessor")
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="results" type="SingleModelResults">
+  Prediction results from the pass-through model
+</ResponseField>
+
+## Utility Functions
+
+### model_utility_score()
+
+Compute a utility score for a model based on error, median ratio, COD, and CHD.
+
+```python
+from openavmkit.modeling import model_utility_score
+
+score = model_utility_score(model_results, test_set=False)
+```
+
+<ParamField path="model_results" type="SingleModelResults" required>
+  SingleModelResults object
+</ParamField>
+
+<ParamField path="test_set" type="bool" default="False">
+  If True, compute the score using the test set results
+</ParamField>
+
+<ResponseField name="score" type="float">
+  Computed utility score (lower is better)
+</ResponseField>
+
+### simple_ols()
+
+Perform simple OLS regression with one independent variable.
+
+```python
+from openavmkit.modeling import simple_ols
+
+results = simple_ols(
+    df,
+    ind_var="square_feet",
+    dep_var="sale_price",
+    intercept=True
+)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing the data
+</ParamField>
+
+<ParamField path="ind_var" type="str" required>
+  Independent variable name
+</ParamField>
+
+<ParamField path="dep_var" type="str" required>
+  Dependent variable name
+</ParamField>
+
+<ParamField path="intercept" type="bool" default="True">
+  Whether to include an intercept
+</ParamField>
+
+<ResponseField name="results" type="dict">
+  Dictionary containing regression results including slope, r2, and other statistics
+</ResponseField>
+
+### simple_mra()
+
+Perform multiple regression analysis with multiple independent variables.
+
+```python
+from openavmkit.modeling import simple_mra
+
+results = simple_mra(
+    df,
+    ind_vars=["square_feet", "bedrooms", "bathrooms"],
+    dep_var="sale_price"
+)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing the data
+</ParamField>
+
+<ParamField path="ind_vars" type="list[str]" required>
+  List of independent variable names
+</ParamField>
+
+<ParamField path="dep_var" type="str" required>
+  Dependent variable name
+</ParamField>
+
+<ResponseField name="results" type="dict">
+  Dictionary containing regression results
+</ResponseField>

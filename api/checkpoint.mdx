@@ -1,0 +1,213 @@
+---
+title: "Checkpoints"
+description: "Save and load intermediate results to speed up workflows and enable data caching"
+---
+
+## Overview
+
+The checkpoint module provides functionality to save and load intermediate computation results. This allows you to cache expensive operations and resume workflows from saved states.
+
+## Main Functions
+
+### from_checkpoint
+
+```python
+from_checkpoint(
+    path: str,
+    func: callable,
+    params: dict,
+    use_checkpoint: bool = True
+) -> pd.DataFrame
+```
+
+Run a function with parameters, using a checkpoint if available.
+
+If a checkpoint exists at the specified path, it will read from it, return the results, and not execute the function. If a checkpoint does not exist, it will execute the function with the provided parameters, save the result to a checkpoint, and return the result.
+
+<ParamField path="path" type="str">
+  The path to the checkpoint file (without extension). Files are saved to `out/checkpoints/{path}`
+</ParamField>
+
+<ParamField path="func" type="callable">
+  The function to execute if the checkpoint does not exist
+</ParamField>
+
+<ParamField path="params" type="dict">
+  The parameters to pass to the function
+</ParamField>
+
+<ParamField path="use_checkpoint" type="bool" default="True">
+  Whether to use the checkpoint if it exists. Set to False to force re-execution
+</ParamField>
+
+<ResponseField name="result" type="pd.DataFrame">
+  The result of the function execution or the checkpoint data
+</ResponseField>
+
+### write_checkpoint
+
+```python
+write_checkpoint(data: Any, path: str)
+```
+
+Write data to a checkpoint file.
+
+<ParamField path="data" type="Any">
+  The data to write to the checkpoint. Can be a DataFrame, GeoDataFrame, or any picklable object
+</ParamField>
+
+<ParamField path="path" type="str">
+  The path to the checkpoint file (without extension). Files are saved to `out/checkpoints/{path}`
+</ParamField>
+
+**Note:** The function automatically determines the file format:
+- GeoDataFrames are saved as `.parquet` files with geometry preserved
+- DataFrames are saved as `.parquet` files
+- Other objects are saved as `.pickle` files
+
+### read_checkpoint
+
+```python
+read_checkpoint(path: str) -> Any
+```
+
+Read a checkpoint from the specified path.
+
+<ParamField path="path" type="str">
+  The path to the checkpoint file (without extension). Looks for files in `out/checkpoints/{path}`
+</ParamField>
+
+<ResponseField name="data" type="Any">
+  The data read from the checkpoint, which can be a DataFrame, GeoDataFrame, or any object that was pickled
+</ResponseField>
+
+**Note:** The function automatically handles:
+- Reading `.parquet` files as DataFrames or GeoDataFrames
+- Converting WKB-encoded geometry columns back to GeoDataFrames
+- Attempting to infer EPSG:4326 CRS for geographic data
+- Falling back to `.pickle` files if parquet is not found
+
+### exists_checkpoint
+
+```python
+exists_checkpoint(path: str) -> bool
+```
+
+Check if a checkpoint exists at the specified path.
+
+<ParamField path="path" type="str">
+  The path to the checkpoint file (without extension). Checks `out/checkpoints/{path}`
+</ParamField>
+
+<ResponseField name="exists" type="bool">
+  True if a checkpoint exists (either `.parquet` or `.pickle`), False otherwise
+</ResponseField>
+
+### delete_checkpoints
+
+```python
+delete_checkpoints(prefix: str)
+```
+
+Delete all checkpoint files that start with the given prefix.
+
+<ParamField path="prefix" type="str">
+  The prefix to match checkpoint files against. All files in `out/checkpoints/` starting with this prefix will be deleted
+</ParamField>
+
+### read_pickle
+
+```python
+read_pickle(path: str) -> Any
+```
+
+Read a pickle file from the specified path.
+
+<ParamField path="path" type="str">
+  The path to the pickle file (without extension). Reads from `{path}.pickle`
+</ParamField>
+
+<ResponseField name="data" type="Any">
+  The data read from the pickle file
+</ResponseField>
+
+## Example Usage
+
+### Basic Checkpoint Usage
+
+```python
+from openavmkit.checkpoint import from_checkpoint
+import pandas as pd
+
+def expensive_computation(year, region):
+    # Simulate expensive operation
+    df = pd.read_csv(f"data/{region}_{year}.csv")
+    # ... complex processing ...
+    return df
+
+# First run: executes function and saves checkpoint
+result = from_checkpoint(
+    path="analysis/cook_2023",
+    func=expensive_computation,
+    params={"year": 2023, "region": "cook"},
+    use_checkpoint=True
+)
+
+# Second run: loads from checkpoint, doesn't re-execute function
+result = from_checkpoint(
+    path="analysis/cook_2023",
+    func=expensive_computation,
+    params={"year": 2023, "region": "cook"},
+    use_checkpoint=True
+)
+```
+
+### Manual Checkpoint Management
+
+```python
+from openavmkit.checkpoint import (
+    write_checkpoint,
+    read_checkpoint,
+    exists_checkpoint,
+    delete_checkpoints
+)
+import pandas as pd
+
+# Create and save checkpoint
+df = pd.DataFrame({"col1": [1, 2, 3], "col2": [4, 5, 6]})
+write_checkpoint(df, "my_data")
+
+# Check if checkpoint exists
+if exists_checkpoint("my_data"):
+    # Load from checkpoint
+    loaded_df = read_checkpoint("my_data")
+    print(loaded_df)
+
+# Delete all checkpoints with prefix
+delete_checkpoints("my_")
+```
+
+### Working with GeoDataFrames
+
+```python
+import geopandas as gpd
+from openavmkit.checkpoint import write_checkpoint, read_checkpoint
+
+# Create a GeoDataFrame
+gdf = gpd.read_file("parcels.shp")
+
+# Save as checkpoint (automatically saved as parquet with geometry)
+write_checkpoint(gdf, "parcels/processed")
+
+# Load back (geometry automatically reconstructed)
+loaded_gdf = read_checkpoint("parcels/processed")
+```
+
+## Storage Location
+
+All checkpoints are stored in the `out/checkpoints/` directory. The directory is created automatically if it doesn't exist.
+
+## File Formats
+
+- **Parquet** (`.parquet`): Used for pandas DataFrames and GeoPandas GeoDataFrames. Provides efficient columnar storage.
+- **Pickle** (`.pickle`): Used for other Python objects that can be serialized.

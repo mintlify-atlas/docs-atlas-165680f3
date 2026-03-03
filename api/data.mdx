@@ -1,0 +1,573 @@
+---
+title: "Data"
+description: "Data loading, processing, and manipulation utilities"
+---
+
+The `data` module provides core data structures and functions for loading, processing, and enriching assessment and sales data.
+
+## Core Data Structures
+
+### SalesUniversePair
+
+A container for the sales and universe DataFrames. Many functions operate on this data structure.
+
+```python
+from openavmkit.data import SalesUniversePair
+
+sup = SalesUniversePair(sales=df_sales, universe=df_universe)
+```
+
+<ParamField path="sales" type="pd.DataFrame" required>
+  DataFrame containing sales data
+</ParamField>
+
+<ParamField path="universe" type="pd.DataFrame" required>
+  DataFrame containing universe (parcel) data
+</ParamField>
+
+#### Methods
+
+**copy()**
+
+Create a copy of the SalesUniversePair object.
+
+```python
+sup_copy = sup.copy()
+```
+
+<ResponseField name="sup_copy" type="SalesUniversePair">
+  A new SalesUniversePair object with copied DataFrames
+</ResponseField>
+
+**set(key, value)**
+
+Set the sales or universe DataFrame.
+
+```python
+sup.set("sales", new_sales_df)
+sup.set("universe", new_universe_df)
+```
+
+<ParamField path="key" type="str" required>
+  Either "sales" or "universe"
+</ParamField>
+
+<ParamField path="value" type="pd.DataFrame" required>
+  The new DataFrame to set for the specified key
+</ParamField>
+
+**update_sales(new_sales, allow_remove_rows)**
+
+Update the sales DataFrame with new information as an overlay without redundancy.
+
+```python
+sup.update_sales(new_sales_df, allow_remove_rows=True)
+```
+
+<ParamField path="new_sales" type="pd.DataFrame" required>
+  New sales DataFrame with updates
+</ParamField>
+
+<ParamField path="allow_remove_rows" type="bool" required>
+  If True, allows the update to remove rows from sales. If False, preserves all original rows
+</ParamField>
+
+**limit_sales_to_keys(new_sale_keys)**
+
+Update the sales DataFrame to only those that match a key in `new_sale_keys`.
+
+```python
+sup.limit_sales_to_keys(["sale_123", "sale_456", "sale_789"])
+```
+
+<ParamField path="new_sale_keys" type="list[str]" required>
+  List of sale keys to filter to
+</ParamField>
+
+## Data Loading Functions
+
+### load_dataframe()
+
+Load a single DataFrame based on configuration settings.
+
+```python
+from openavmkit.data import load_dataframe
+
+df = load_dataframe(
+    entry,
+    settings,
+    verbose=True,
+    fields_cat=categorical_fields,
+    fields_bool=boolean_fields,
+    fields_num=numeric_fields
+)
+```
+
+<ParamField path="entry" type="dict" required>
+  Configuration entry for loading the dataframe
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints detailed logs during data loading
+</ParamField>
+
+<ParamField path="fields_cat" type="list[str]" default="None">
+  List of categorical field names
+</ParamField>
+
+<ParamField path="fields_bool" type="list[str]" default="None">
+  List of boolean field names
+</ParamField>
+
+<ParamField path="fields_num" type="list[str]" default="None">
+  List of numeric field names
+</ParamField>
+
+<ResponseField name="df" type="pd.DataFrame">
+  The loaded DataFrame
+</ResponseField>
+
+## Data Processing Functions
+
+### process_data()
+
+Process raw dataframes according to settings and return a SalesUniversePair.
+
+```python
+from openavmkit.data import process_data
+
+sup = process_data(dataframes, settings, verbose=True)
+```
+
+<ParamField path="dataframes" type="dict[str, pd.DataFrame]" required>
+  Dictionary mapping keys to DataFrames
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints progress information
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  A SalesUniversePair containing processed sales and universe data
+</ResponseField>
+
+### get_hydrated_sales_from_sup()
+
+Merge the sales and universe DataFrames to "hydrate" the sales data.
+
+```python
+from openavmkit.data import get_hydrated_sales_from_sup
+
+df_hydrated = get_hydrated_sales_from_sup(sup)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  SalesUniversePair containing sales and universe DataFrames
+</ParamField>
+
+<ResponseField name="df_hydrated" type="pd.DataFrame | gpd.GeoDataFrame">
+  The merged (hydrated) sales DataFrame
+</ResponseField>
+
+### get_sup_model_group()
+
+Get a subset of a SalesUniversePair for a specific model group.
+
+```python
+from openavmkit.data import get_sup_model_group
+
+sup_mg = get_sup_model_group(sup, model_group_id)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  The SalesUniversePair to filter
+</ParamField>
+
+<ParamField path="model_group_id" type="str" required>
+  The model group identifier to filter by
+</ParamField>
+
+<ResponseField name="sup_mg" type="SalesUniversePair">
+  A new SalesUniversePair containing only the specified model group
+</ResponseField>
+
+## Enrichment Functions
+
+### enrich_time()
+
+Enrich the DataFrame by converting specified time fields to datetime and deriving additional fields.
+
+```python
+from openavmkit.data import enrich_time
+
+df = enrich_time(df, time_formats, settings)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame
+</ParamField>
+
+<ParamField path="time_formats" type="dict" required>
+  Dictionary mapping field names to datetime formats
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="df" type="pd.DataFrame">
+  DataFrame with enriched time fields
+</ResponseField>
+
+### enrich_sup_spatial_lag()
+
+Enrich the sales and universe DataFrames with spatial lag features.
+
+```python
+from openavmkit.data import enrich_sup_spatial_lag
+
+sup = enrich_sup_spatial_lag(sup, settings, verbose=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  SalesUniversePair containing sales and universe DataFrames
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints progress information
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Enriched SalesUniversePair with spatial lag features
+</ResponseField>
+
+### enrich_df_streets()
+
+Enrich a GeoDataFrame with street network data.
+
+<Warning>
+This function can be VERY computationally and memory intensive for large datasets.
+</Warning>
+
+```python
+from openavmkit.data import enrich_df_streets
+
+df = enrich_df_streets(
+    df,
+    settings,
+    spacing=1.0,
+    max_ray_length=25.0,
+    network_buffer=500.0,
+    verbose=True
+)
+```
+
+<ParamField path="df_in" type="gpd.GeoDataFrame" required>
+  Input GeoDataFrame containing parcels
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary containing configuration for the enrichment
+</ParamField>
+
+<ParamField path="spacing" type="float" default="1.0">
+  Spacing in meters for ray casting to calculate distances to streets
+</ParamField>
+
+<ParamField path="max_ray_length" type="float" default="25.0">
+  Maximum length of rays to shoot for distance calculations, in meters
+</ParamField>
+
+<ParamField path="network_buffer" type="float" default="500.0">
+  Buffer around the street network to consider for distance calculations, in meters
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints progress information
+</ParamField>
+
+<ResponseField name="df" type="gpd.GeoDataFrame">
+  Enriched GeoDataFrame with additional columns for street-related metrics
+</ResponseField>
+
+## Utility Functions
+
+### get_sale_field()
+
+Determine the appropriate sale price field based on time adjustment settings.
+
+```python
+from openavmkit.data import get_sale_field
+
+sale_field = get_sale_field(settings, df)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to check field existence
+</ParamField>
+
+<ResponseField name="sale_field" type="str">
+  Field name to be used for sale price (either "sale_price" or "sale_price_time_adj")
+</ResponseField>
+
+### get_vacant_sales()
+
+Filter the sales DataFrame to return only vacant (unimproved) sales.
+
+```python
+from openavmkit.data import get_vacant_sales
+
+df_vacant = get_vacant_sales(df, settings, invert=False)
+```
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="invert" type="bool" default="False">
+  If True, return non-vacant (improved) sales
+</ParamField>
+
+<ResponseField name="df_vacant" type="pd.DataFrame">
+  DataFrame with an added `is_vacant` column
+</ResponseField>
+
+### get_vacant()
+
+Filter the DataFrame based on the 'is_vacant' column.
+
+```python
+from openavmkit.data import get_vacant
+
+df_vacant = get_vacant(df, settings, invert=False)
+```
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="invert" type="bool" default="False">
+  If True, return non-vacant rows
+</ParamField>
+
+<ResponseField name="df_vacant" type="pd.DataFrame">
+  DataFrame filtered by the `is_vacant` flag
+</ResponseField>
+
+### get_train_test_keys()
+
+Get the training and testing keys for the sales DataFrame.
+
+```python
+from openavmkit.data import get_train_test_keys
+
+train_keys, test_keys = get_train_test_keys(df, settings)
+```
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame containing sales data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="keys_train" type="np.ndarray">
+  Keys for training set
+</ResponseField>
+
+<ResponseField name="keys_test" type="np.ndarray">
+  Keys for testing set
+</ResponseField>
+
+### get_train_test_masks()
+
+Get the training and testing masks for the sales DataFrame.
+
+```python
+from openavmkit.data import get_train_test_masks
+
+mask_train, mask_test = get_train_test_masks(df, settings)
+```
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame containing sales data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="mask_train" type="pd.Series">
+  Boolean mask for training set
+</ResponseField>
+
+<ResponseField name="mask_test" type="pd.Series">
+  Boolean mask for testing set
+</ResponseField>
+
+## Field Classification Functions
+
+### get_field_classifications()
+
+Retrieve a mapping of field names to their classifications (land, improvement, or other) and types.
+
+```python
+from openavmkit.data import get_field_classifications
+
+field_map = get_field_classifications(settings)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="field_map" type="dict">
+  Dictionary mapping field names to type and class
+</ResponseField>
+
+### get_important_field()
+
+Retrieve the important field name for a given field alias from settings.
+
+```python
+from openavmkit.data import get_important_field
+
+field_name = get_important_field(settings, "deed_id", df)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="field_name" type="str" required>
+  Identifier for the field
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to check field existence
+</ParamField>
+
+<ResponseField name="field_name" type="str | None">
+  The mapped field name if found, else None
+</ResponseField>
+
+### get_report_locations()
+
+Retrieve report location fields from settings.
+
+```python
+from openavmkit.data import get_report_locations
+
+locations = get_report_locations(settings, df)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to filter available locations
+</ParamField>
+
+<ResponseField name="locations" type="list[str]">
+  List of report location field names
+</ResponseField>
+
+## Output Functions
+
+### write_parquet()
+
+Write data to a parquet file.
+
+```python
+from openavmkit.data import write_parquet
+
+write_parquet(df, "out/data.parquet")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Data to be written
+</ParamField>
+
+<ParamField path="path" type="str" required>
+  File path for saving the parquet
+</ParamField>
+
+### write_gpkg()
+
+Write data to a GeoPackage file.
+
+```python
+from openavmkit.data import write_gpkg
+
+write_gpkg(gdf, "out/data.gpkg")
+```
+
+<ParamField path="df" type="gpd.GeoDataFrame" required>
+  Data to be written
+</ParamField>
+
+<ParamField path="path" type="str" required>
+  File path for saving the GeoPackage
+</ParamField>
+
+### write_zipped_shapefile()
+
+Write data to a zipped shapefile.
+
+```python
+from openavmkit.data import write_zipped_shapefile
+
+write_zipped_shapefile(gdf, "out/data.shp.zip")
+```
+
+<ParamField path="df" type="gpd.GeoDataFrame" required>
+  Data to be written
+</ParamField>
+
+<ParamField path="path" type="str" required>
+  File path for saving the zipped shapefile
+</ParamField>
+
+### write_csv()
+
+Write data to a CSV file.
+
+```python
+from openavmkit.data import write_csv
+
+write_csv(df, "out/data.csv")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Data to be written
+</ParamField>
+
+<ParamField path="path" type="str" required>
+  File path for saving the CSV
+</ParamField>

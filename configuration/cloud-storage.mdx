@@ -1,0 +1,346 @@
+---
+title: Cloud Storage Configuration
+description: Configure Azure, HuggingFace, or SFTP cloud storage to sync your OpenAVM Kit data and outputs
+---
+
+## Overview
+
+OpenAVM Kit supports remote storage services for syncing input data and outputs across different environments. This is especially useful for:
+
+- Sharing datasets across team members
+- Backing up your work to the cloud
+- Accessing public datasets maintained by organizations
+- Deploying models in production environments
+
+## Supported Storage Services
+
+OpenAVM Kit currently supports three cloud storage methods:
+
+<CardGroup cols={3}>
+  <Card title="Microsoft Azure" icon="microsoft">
+    Azure Blob Storage for enterprise deployments
+  </Card>
+  <Card title="Hugging Face" icon="face-smile">
+    Hugging Face datasets for ML workflows
+  </Card>
+  <Card title="SFTP" icon="server">
+    Secure FTP for traditional file servers
+  </Card>
+</CardGroup>
+
+## Environment Configuration
+
+All cloud storage credentials must be stored in a `.env` file located in the `notebooks/` directory.
+
+<Warning>
+**Security Notice**
+
+The `.env` file is already in `.gitignore`, but always verify you don't accidentally commit credentials to version control. Never share this file publicly.
+</Warning>
+
+### Creating the .env File
+
+Create a plain text file at `notebooks/.env` with your configuration:
+
+```bash
+notebooks/
+  ├── .env          # <-- Create this file
+  ├── pipeline/
+```
+
+The file should follow this format:
+
+```bash
+SOME_VARIABLE=some_value
+ANOTHER_VARIABLE=another_value
+YET_ANOTHER_VARIABLE=123
+```
+
+<Note>
+You only need to provide values for the service you're actually using. The library will automatically detect which cloud service to use based on the available environment variables.
+</Note>
+
+## Azure Blob Storage
+
+Configure Azure Blob Storage for enterprise-grade cloud storage.
+
+### Required Environment Variables
+
+<ParamField path="AZURE_ACCESS" type="string" required>
+  Access level for your Azure account
+  
+  **Options:**
+  - `read_only` - Download files only
+  - `read_write` - Download and upload files
+</ParamField>
+
+<ParamField path="AZURE_STORAGE_CONTAINER_NAME" type="string" required>
+  The name of your Azure storage container
+</ParamField>
+
+<ParamField path="AZURE_STORAGE_CONNECTION_STRING" type="string" required>
+  The connection string for your Azure storage account. Find this in the Azure Portal under your storage account's "Access keys" section.
+</ParamField>
+
+### Example Configuration
+
+<CodeGroup>
+```bash Read/Write Access
+# Azure Blob Storage Configuration
+AZURE_ACCESS=read_write
+AZURE_STORAGE_CONTAINER_NAME=openavmkit-data
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+```
+
+```bash Read-Only Access
+# Azure Blob Storage Configuration (Read-Only)
+AZURE_ACCESS=read_only
+AZURE_STORAGE_CONTAINER_NAME=openavmkit-public
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+```
+</CodeGroup>
+
+### Getting Your Connection String
+
+1. Navigate to your Storage Account in the Azure Portal
+2. Go to **Security + networking** > **Access keys**
+3. Click **Show keys**
+4. Copy one of the connection strings
+
+## Hugging Face
+
+Configure Hugging Face for ML-focused workflows and easy dataset sharing.
+
+### Required Environment Variables
+
+<ParamField path="HF_ACCESS" type="string" required>
+  Access level for your Hugging Face account
+  
+  **Options:**
+  - `read_only` - Download datasets only
+  - `read_write` - Download and upload datasets
+</ParamField>
+
+<ParamField path="HF_REPO_ID" type="string" required>
+  The Hugging Face repository ID in format `username/repo-name` or `organization/repo-name`
+</ParamField>
+
+<ParamField path="HF_TOKEN" type="string">
+  Your Hugging Face API token. Required for private repositories or write access. Optional for public read-only access.
+</ParamField>
+
+### Example Configuration
+
+<CodeGroup>
+```bash Read/Write Access
+# Hugging Face Configuration
+HF_ACCESS=read_write
+HF_REPO_ID=your-username/localities-data
+HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx
+```
+
+```bash Public Read-Only
+# Hugging Face Configuration (Public Dataset)
+HF_ACCESS=read_only
+HF_REPO_ID=landeconomics/localities
+```
+
+```bash Center for Land Economics
+# Access public datasets from The Center for Land Economics
+HF_ACCESS=read_only
+HF_REPO_ID=landeconomics/localities
+```
+</CodeGroup>
+
+### Getting Your API Token
+
+1. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+2. Click **New token**
+3. Give it a descriptive name like "openavmkit"
+4. Select the appropriate permissions (read or write)
+5. Copy the token and add it to your `.env` file
+
+<Tip>
+**Using Public Datasets**
+
+You can access public Hugging Face datasets without a token by using `read_only` access. This is perfect for getting started with datasets from The Center for Land Economics or other public sources.
+</Tip>
+
+## SFTP (Secure File Transfer Protocol)
+
+Configure SFTP for traditional file server setups.
+
+### Required Environment Variables
+
+<ParamField path="SFTP_ACCESS" type="string" required>
+  Access level for your SFTP account
+  
+  **Options:**
+  - `read_only` - Download files only
+  - `read_write` - Download and upload files
+</ParamField>
+
+<ParamField path="SFTP_HOST" type="string" required>
+  The hostname or IP address of your SFTP server
+</ParamField>
+
+<ParamField path="SFTP_USERNAME" type="string" required>
+  Your SFTP username
+</ParamField>
+
+<ParamField path="SFTP_PASSWORD" type="string">
+  Your SFTP password (required if not using key-based authentication)
+</ParamField>
+
+<ParamField path="SFTP_PORT" type="number" default="22">
+  The port number for your SFTP server
+</ParamField>
+
+### Example Configuration
+
+<CodeGroup>
+```bash Password Authentication
+# SFTP Configuration
+SFTP_ACCESS=read_write
+SFTP_HOST=sftp.example.com
+SFTP_PORT=22
+SFTP_USERNAME=your-username
+SFTP_PASSWORD=your-secure-password
+```
+
+```bash Custom Port
+# SFTP Configuration with Custom Port
+SFTP_ACCESS=read_only
+SFTP_HOST=192.168.1.100
+SFTP_PORT=2222
+SFTP_USERNAME=datauser
+SFTP_PASSWORD=secure-password-here
+```
+</CodeGroup>
+
+## Switching Between Cloud Services
+
+If you work with multiple projects that use different cloud storage services, you can configure the service selection in your `settings.json`:
+
+```json
+{
+  "cloud": {
+    "type": "huggingface",
+    "access": "read_write"
+  }
+}
+```
+
+<ParamField path="cloud.type" type="string">
+  Force a specific cloud service
+  
+  **Options:**
+  - `azure`
+  - `huggingface`
+  - `sftp`
+</ParamField>
+
+<ParamField path="cloud.access" type="string">
+  Override the access level from the `.env` file
+  
+  **Options:**
+  - `read_only`
+  - `read_write`
+</ParamField>
+
+<Warning>
+**Never Store Credentials in settings.json**
+
+Only use `settings.json` to specify which cloud service to use, not to store credentials. The settings file may be synced to cloud storage, creating a security risk. Always keep credentials in the `.env` file.
+</Warning>
+
+## Using Cloud Storage in Code
+
+The cloud storage functionality is integrated into the pipeline:
+
+```python
+from openavmkit.pipeline import download_inputs, upload_outputs
+
+# Download inputs from cloud storage
+download_inputs(
+    locality="us-tx-travis",
+    cloud_type="huggingface"  # or "azure", "sftp"
+)
+
+# Upload outputs to cloud storage
+upload_outputs(
+    locality="us-tx-travis",
+    cloud_type="huggingface"
+)
+```
+
+## Troubleshooting
+
+### Connection Errors
+
+<AccordionGroup>
+  <Accordion title="Azure: Invalid connection string">
+    Verify your connection string is complete and includes `AccountName`, `AccountKey`, and `DefaultEndpointsProtocol`. Copy it directly from the Azure Portal.
+  </Accordion>
+  
+  <Accordion title="Hugging Face: Authentication failed">
+    For private repositories or write access, ensure your `HF_TOKEN` is valid and has the appropriate permissions. Regenerate the token if necessary.
+  </Accordion>
+  
+  <Accordion title="SFTP: Connection timeout">
+    Check that:
+    - The hostname is correct and reachable
+    - The port is correct (default is 22)
+    - Your firewall allows outbound connections on the SFTP port
+    - The SFTP server is running
+  </Accordion>
+</AccordionGroup>
+
+### Permission Errors
+
+If you encounter permission errors when uploading:
+
+1. Verify your access is set to `read_write` in the `.env` file
+2. Check that your account has write permissions on the remote storage
+3. For Hugging Face, ensure your token has write access
+4. For Azure, verify your connection string is from an account with write permissions
+
+### File Not Found
+
+If files aren't downloading:
+
+1. Verify the file exists in the remote storage
+2. Check that the locality slug matches exactly
+3. Ensure your access level allows reading
+4. For Hugging Face, verify the repository ID is correct
+
+## Best Practices
+
+<Tip>
+**Use Read-Only for Shared Datasets**
+
+When accessing shared or public datasets, use `read_only` access to prevent accidental modifications.
+</Tip>
+
+<Tip>
+**Separate Development and Production**
+
+Use different storage containers or repositories for development and production environments to avoid data conflicts.
+</Tip>
+
+<Tip>
+**Version Your Data**
+
+For Hugging Face repositories, use git tags or branches to version your datasets and ensure reproducibility.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Settings Configuration" icon="gear" href="/configuration/settings">
+    Learn more about configuring settings.json
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/installation">
+    Return to the getting started guide
+  </Card>
+</CardGroup>

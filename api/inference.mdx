@@ -1,0 +1,330 @@
+---
+title: Model Inference
+description: Machine learning models for spatial inference and missing value prediction
+---
+
+## perform_spatial_inference
+
+```python
+perform_spatial_inference(
+    df: gpd.GeoDataFrame, 
+    s_infer: dict, 
+    key: str, 
+    verbose: bool = False
+) -> gpd.GeoDataFrame
+```
+
+Perform spatial inference using specified model(s) to predict missing values in spatial datasets. This is the main orchestration function that handles the entire inference pipeline.
+
+<ParamField path="df" type="gpd.GeoDataFrame" required>
+  Input GeoDataFrame with features and target variable.
+</ParamField>
+
+<ParamField path="s_infer" type="dict" required>
+  Inference settings from config. Dictionary where keys are field names to infer and values are configuration dicts containing:
+  - `model`: Model configuration (type, proxies, locations, interactions)
+  - `filters`: Optional filter conditions to determine inference scope
+  - `fill`: Optional list of fields to use for direct filling before inference
+  - `round`: Whether to round predictions (default: True)
+</ParamField>
+
+<ParamField path="key" type="str" required>
+  Key field name for caching and identification.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print progress and diagnostic information.
+</ParamField>
+
+<ResponseField name="return" type="gpd.GeoDataFrame">
+  GeoDataFrame with inferred values. Adds a boolean field `inferred_{field_name}` for each inferred field.
+</ResponseField>
+
+### Example
+
+```python
+import geopandas as gpd
+from openavmkit.inference import perform_spatial_inference
+
+# Load data
+df = gpd.read_file("parcels.geojson")
+
+# Configure inference
+s_infer = {
+    "bldg_sqft": {
+        "model": {
+            "type": "lightgbm",
+            "proxies": ["bldg_footprint_sqft", "land_sqft"],
+            "locations": ["neighborhood", "property_class"],
+            "interactions": [["neighborhood", "property_class"]]
+        },
+        "fill": ["tax_bldg_sqft"],
+        "round": True
+    }
+}
+
+# Perform inference
+df_result = perform_spatial_inference(df, s_infer, key="parcel_id", verbose=True)
+```
+
+---
+
+## InferenceModel (Base Class)
+
+```python
+class InferenceModel(ABC)
+```
+
+Abstract base class for all inference models. All inference models must implement the three core methods: `fit()`, `predict()`, and `evaluate()`.
+
+### fit
+
+```python
+fit(df: pd.DataFrame, target: str, settings: Dict[str, Any]) -> None
+```
+
+Fit the model using training data.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Training data containing features and target variable.
+</ParamField>
+
+<ParamField path="target" type="str" required>
+  Field name of the target variable to predict.
+</ParamField>
+
+<ParamField path="settings" type="Dict[str, Any]" required>
+  Settings dictionary containing model configuration:
+  - `proxies`: List of proxy/feature field names
+  - `locations`: List of location/grouping field names
+  - `interactions`: List of interaction feature definitions
+</ParamField>
+
+### predict
+
+```python
+predict(df: pd.DataFrame) -> pd.Series
+```
+
+Make predictions on new data.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Data to perform predictions on.
+</ParamField>
+
+<ResponseField name="return" type="pd.Series">
+  Predicted values of the target variable chosen during fit().
+</ResponseField>
+
+### evaluate
+
+```python
+evaluate(df: pd.DataFrame, target: str) -> Dict[str, float]
+```
+
+Evaluate model performance on training data.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Training data with features and true target values.
+</ParamField>
+
+<ParamField path="target" type="str" required>
+  Field name of the target variable.
+</ParamField>
+
+<ResponseField name="return" type="Dict[str, float]">
+  Dictionary containing evaluation metrics:
+  - `mae`: Mean Absolute Error
+  - `mape`: Mean Absolute Percentage Error
+  - `rmse`: Root Mean Squared Error
+  - `r2`: R-squared score
+</ResponseField>
+
+---
+
+## Available Models
+
+### RatioProxyModel
+
+```python
+model = RatioProxyModel()
+```
+
+Ratio-based proxy model that calculates median ratios between target and proxy variables, stratified by location and grouping variables. Simple but effective for linear relationships.
+
+**Best for**: Linear relationships, simple proxy-based predictions
+
+### RandomForestModel
+
+```python
+model = RandomForestModel()
+```
+
+Random Forest regressor with 200 trees. Handles non-linear relationships and feature interactions well.
+
+**Configuration**:
+- n_estimators: 200
+- max_depth: None
+- min_samples_split: 5
+- min_samples_leaf: 2
+
+**Best for**: Non-linear relationships, robust predictions
+
+### LightGBMModel
+
+```python
+model = LightGBMModel()
+```
+
+LightGBM gradient boosting model. Fast training and high accuracy with good handling of categorical features.
+
+**Configuration**:
+- n_estimators: 200
+- max_depth: -1 (no limit)
+- learning_rate: 0.05
+- subsample: 0.8
+- colsample_bytree: 0.8
+
+**Best for**: Large datasets, categorical features, high accuracy requirements
+
+### XGBoostModel
+
+```python
+model = XGBoostModel()
+```
+
+XGBoost gradient boosting model. Excellent performance with regularization to prevent overfitting.
+
+**Configuration**:
+- n_estimators: 200
+- max_depth: 6
+- learning_rate: 0.05
+- subsample: 0.8
+- colsample_bytree: 0.8
+
+**Best for**: Structured data, preventing overfitting, competition-grade accuracy
+
+### EnsembleModel
+
+```python
+model = EnsembleModel()
+```
+
+Ensemble model combining LightGBM, XGBoost, and Random Forest. Automatically optimizes weights for each model to minimize RMSE on validation data.
+
+**Best for**: Maximum accuracy, reducing model variance
+
+---
+
+## Model Selection
+
+To experiment with different models and find the best performer:
+
+```python
+s_infer = {
+    "bldg_sqft": {
+        "model": {
+            "type": "lightgbm",  # Current model
+            "experiment": True,   # Enable experimentation
+            "proxies": ["bldg_footprint_sqft"],
+            "locations": ["neighborhood"]
+        }
+    }
+}
+```
+
+When `experiment: True`, the system will:
+1. Train and evaluate all available models
+2. Report performance metrics for each
+3. Compare results on both validation and fill data
+4. Recommend the best performing model
+5. Still use the specified `type` for final predictions
+
+---
+
+## CategoricalEncoder
+
+```python
+encoder = CategoricalEncoder()
+```
+
+Universal categorical encoder that handles unseen categories by mapping them to a special unknown value.
+
+### fit
+
+```python
+fit(series: pd.Series) -> None
+```
+
+Fit encoder by learning categories from the series.
+
+### transform
+
+```python
+transform(series: pd.Series) -> np.ndarray
+```
+
+Transform values, mapping unseen categories to unknown.
+
+### fit_transform
+
+```python
+fit_transform(series: pd.Series) -> np.ndarray
+```
+
+Fit and transform in one step.
+
+---
+
+## Advanced Configuration
+
+### Interaction Features
+
+Create interaction features by combining multiple fields:
+
+```python
+s_infer = {
+    "bldg_sqft": {
+        "model": {
+            "type": "xgboost",
+            "proxies": ["bldg_footprint_sqft", "stories"],
+            "locations": ["neighborhood", "property_class"],
+            "interactions": [
+                ["neighborhood", "property_class"],
+                ["neighborhood", "zoning"]
+            ]
+        }
+    }
+}
+```
+
+### Fill Before Inference
+
+Use known values from related fields before running inference:
+
+```python
+s_infer = {
+    "bldg_sqft": {
+        "model": {...},
+        "fill": ["tax_bldg_sqft", "assessor_bldg_sqft"]
+    }
+}
+```
+
+### Filtered Inference
+
+Only infer values for specific subsets:
+
+```python
+s_infer = {
+    "bldg_sqft": {
+        "model": {...},
+        "filters": [
+            ["and",
+                ["==", "is_vacant", False],
+                [">", "land_sqft", 1000]
+            ]
+        ]
+    }
+}
+```

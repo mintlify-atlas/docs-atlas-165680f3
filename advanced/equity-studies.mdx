@@ -1,0 +1,420 @@
+---
+title: Equity Studies
+description: Understanding horizontal and vertical equity in mass appraisal
+---
+
+## Overview
+
+Equity in mass appraisal means treating all property owners fairly. OpenAVM Kit provides tools to measure and ensure both horizontal equity (similar properties assessed similarly) and vertical equity (consistent treatment across value levels).
+
+<Info>
+Equity analysis ensures that assessment models don't systematically favor or penalize certain property types or value ranges.
+</Info>
+
+## Types of Equity
+
+### Horizontal Equity
+
+**Definition**: Properties with similar characteristics should have similar assessment ratios.
+
+**Measurement**: Coefficient of Horizontal Dispersion (CHD) within clusters of comparable properties.
+
+### Vertical Equity
+
+**Definition**: Assessment ratios should be consistent across different value levels.
+
+**Measurement**: Price-Related Differential (PRD) and Price-Related Bias (PRB).
+
+## Horizontal Equity Analysis
+
+### The Clustering Approach
+
+Horizontal equity requires identifying groups of similar properties:
+
+```python
+from openavmkit.horizontal_equity_study import (
+    mark_horizontal_equity_clusters,
+    HorizontalEquityStudy
+)
+
+# Mark clusters based on location and characteristics
+df = mark_horizontal_equity_clusters(
+    df,
+    settings,
+    verbose=True,
+    id_name="he_id"
+)
+
+# Analyze equity within clusters
+study = HorizontalEquityStudy(
+    df,
+    field_cluster="he_id",
+    field_value="prediction"
+)
+```
+
+### Configuration
+
+Define clustering criteria in settings:
+
+```yaml
+analysis:
+  horizontal_equity:
+    enabled: true
+    location: neighborhood  # Primary geographic grouping
+    fields_categorical:
+      - property_class
+      - bedrooms
+      - bathrooms
+    fields_numeric:
+      - year_built: 10      # Bin by decade
+      - living_area_sf: 500 # Bin by 500 sqft
+```
+
+### HorizontalEquitySummary
+
+The summary provides distribution statistics across all clusters:
+
+```python
+summary = study.summary
+
+print(f"Total Rows: {summary.rows:,}")
+print(f"Total Clusters: {summary.clusters:,}")
+print(f"Median CHD: {summary.median_chd:.2f}")
+print(f"5th percentile CHD: {summary.p05_chd:.2f}")
+print(f"95th percentile CHD: {summary.p95_chd:.2f}")
+```
+
+**Attributes:**
+- `rows`: Total number of properties analyzed
+- `clusters`: Number of comparable property groups
+- `min_chd`: Best-performing cluster
+- `max_chd`: Worst-performing cluster
+- `median_chd`: Typical cluster performance
+- `p05_chd`, `p25_chd`, `p75_chd`, `p95_chd`: Percentile distributions
+
+### Coefficient of Horizontal Dispersion (CHD)
+
+CHD is calculated as COD within each cluster:
+
+```python
+import numpy as np
+from openavmkit.utilities.stats import calc_cod
+
+# For each cluster
+for cluster_id in df["he_id"].unique():
+    df_cluster = df[df["he_id"] == cluster_id]
+    values = df_cluster["prediction"].values
+    
+    # CHD is the COD within the cluster
+    chd = calc_cod(values)
+    print(f"Cluster {cluster_id}: CHD = {chd:.2f}")
+```
+
+### Cluster Summary
+
+Each cluster has detailed statistics:
+
+```python
+from openavmkit.horizontal_equity_study import HorizontalEquityClusterSummary
+
+# Access individual cluster summaries
+for cluster_id, cluster_summary in study.cluster_summaries.items():
+    print(f"Cluster: {cluster_summary.id}")
+    print(f"  Count: {cluster_summary.count}")
+    print(f"  CHD: {cluster_summary.chd:.2f}")
+    print(f"  Min: ${cluster_summary.min:,.0f}")
+    print(f"  Median: ${cluster_summary.median:,.0f}")
+    print(f"  Max: ${cluster_summary.max:,.0f}")
+```
+
+**Attributes:**
+- `id`: Cluster identifier
+- `count`: Number of properties in cluster
+- `chd`: Coefficient of Horizontal Dispersion
+- `min`: Minimum value in cluster
+- `max`: Maximum value in cluster  
+- `median`: Median value in cluster
+
+### Multi-Level Equity Analysis
+
+OpenAVM Kit supports specialized equity clusters:
+
+```python
+from openavmkit.horizontal_equity_study import mark_horizontal_equity_clusters_per_model_group_sup
+
+# Mark general, land, and improvement equity clusters
+sup = mark_horizontal_equity_clusters_per_model_group_sup(
+    sup,
+    settings,
+    verbose=True,
+    do_land_clusters=True,    # For vacant land equity
+    do_impr_clusters=True     # For improvement equity
+)
+```
+
+This creates three cluster types:
+- **General clusters** (`he_id`): Overall horizontal equity
+- **Land clusters** (`land_he_id`): Equity for land values
+- **Improvement clusters** (`impr_he_id`): Equity for building values
+
+### Land Equity Configuration
+
+```yaml
+analysis:
+  land_equity:
+    location: neighborhood
+    fields_categorical:
+      - zoning
+      - land_use
+    fields_numeric:
+      - lot_size_sf: 5000
+```
+
+<Warning>
+When analyzing land equity, you should provide at least a `location` field to ensure meaningful clusters.
+</Warning>
+
+### Improvement Equity Configuration
+
+```yaml
+analysis:
+  impr_equity:
+    location: neighborhood
+    fields_categorical:
+      - property_class
+      - construction_quality
+    fields_numeric:
+      - year_built: 10
+      - living_area_sf: 500
+```
+
+## Vertical Equity Analysis
+
+Vertical equity examines consistency across property value levels:
+
+### VerticalEquityStudy Class
+
+```python
+from openavmkit.vertical_equity_study import VerticalEquityStudy
+
+# Create vertical equity study
+study = VerticalEquityStudy(
+    df_sales,
+    field_sales="sale_price",
+    field_prediction="prediction",
+    field_location="neighborhood",
+    confidence_interval=0.95,
+    iterations=10000
+)
+```
+
+### Key Metrics
+
+The study calculates:
+
+**PRD (Price-Related Differential):**
+```python
+print(f"PRD: {study.prd.value:.3f}")
+print(f"95% CI: [{study.prd.low:.3f}, {study.prd.high:.3f}]")
+```
+
+**PRB (Price-Related Bias):**
+```python
+print(f"PRB: {study.prb.value:.3f}")
+print(f"95% CI: [{study.prb.low:.3f}, {study.prb.high:.3f}]")
+```
+
+### Summary Output
+
+```python
+df_summary = study.summary()
+print(df_summary)
+```
+
+Output includes:
+- Point values for PRD and PRB
+- Confidence interval bounds
+- Statistical significance indicators
+- IAAO compliance flags
+
+### Price Quantile Analysis
+
+Vertical equity studies divide sales into price tiers:
+
+```python
+# Analyze median ratio by price quantile
+df_quantiles = study.quantiles
+
+print(df_quantiles[["quantile", "ratio", "ratio_low", "ratio_high"]])
+```
+
+Output:
+```
+   quantile  ratio  ratio_low  ratio_high
+0        10  1.042      1.028       1.056
+1        20  1.035      1.022       1.048
+2        30  1.028      1.016       1.040
+...
+```
+
+### Grouped Quantiles
+
+Grouped quantiles assign entire neighborhoods to price tiers:
+
+```python
+# Use grouped quantiles for geographic consistency
+df_grouped = study.grouped_quantiles
+```
+
+This prevents neighborhoods from being split across multiple price tiers.
+
+### Visualization
+
+Plot vertical equity:
+
+```python
+# Plot median ratio by price tier
+study.plot_quantiles(
+    ci_bounds=True,    # Show confidence intervals
+    ylim=(0.9, 1.1),   # Y-axis limits
+    grouped=False      # Use direct quantiles
+)
+```
+
+<Info>
+Ideal vertical equity shows a flat line around 1.0 across all price tiers, indicating consistent assessment levels.
+</Info>
+
+## Interpreting Results
+
+### Horizontal Equity Benchmarks
+
+| Median CHD | Assessment Quality |
+|------------|--------------------|
+| < 5.0      | Excellent          |
+| 5.0-10.0   | Good              |
+| 10.0-15.0  | Acceptable        |
+| > 15.0     | Needs improvement |
+
+### Vertical Equity Benchmarks
+
+**PRD Standards:**
+- **Excellent**: 0.98-1.03
+- **Acceptable**: 0.95-1.05
+- **Needs improvement**: Outside acceptable range
+
+**PRB Standards:**
+- **Excellent**: -0.05 to +0.05
+- **Acceptable**: -0.10 to +0.10
+- **Needs improvement**: Outside acceptable range
+
+### Statistical Significance
+
+Use confidence intervals to determine significance:
+
+```python
+prd = study.prd
+
+if prd.low <= 1.00 <= prd.high:
+    print("PRD is not statistically different from 1.00")
+else:
+    if prd.value > 1.00:
+        print("Statistically significant REGRESSIVITY detected")
+    else:
+        print("Statistically significant PROGRESSIVITY detected")
+```
+
+<Warning>
+Statistically significant inequity requires model adjustment. Don't ignore systematic bias, even if metrics are close to targets.
+</Warning>
+
+## Addressing Inequity
+
+### For Horizontal Inequity (High CHD)
+
+1. **Add more property characteristics** to differentiate similar properties
+2. **Refine clustering criteria** for better comparable groups
+3. **Check data quality** in high-CHD clusters
+4. **Consider local market factors** not captured by the model
+
+### For Vertical Inequity (PRD/PRB issues)
+
+1. **Check for non-linear relationships** in value
+2. **Add value-based features** or interactions
+3. **Use stratified models** for different value ranges
+4. **Apply post-modeling adjustments** to correct bias
+
+## Complete Workflow
+
+```python
+from openavmkit.data import SalesUniversePair
+from openavmkit.horizontal_equity_study import (
+    mark_horizontal_equity_clusters_per_model_group_sup,
+    HorizontalEquityStudy
+)
+from openavmkit.vertical_equity_study import VerticalEquityStudy
+
+# Step 1: Mark horizontal equity clusters
+sup = mark_horizontal_equity_clusters_per_model_group_sup(
+    sup,
+    settings,
+    verbose=True
+)
+
+# Step 2: Analyze horizontal equity
+he_study = HorizontalEquityStudy(
+    sup.universe,
+    field_cluster="he_id",
+    field_value="prediction"
+)
+
+print("\nHorizontal Equity Summary:")
+print(he_study.summary.print())
+
+# Step 3: Analyze vertical equity
+df_sales = get_hydrated_sales_from_sup(sup)
+ve_study = VerticalEquityStudy(
+    df_sales,
+    field_sales="sale_price",
+    field_prediction="prediction",
+    field_location="neighborhood"
+)
+
+print("\nVertical Equity Summary:")
+print(ve_study.summary())
+
+# Step 4: Visualize
+ve_study.plot_quantiles(ci_bounds=True)
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Define Meaningful Clusters">
+    Use location, property type, and key characteristics to create comparable groups
+  </Step>
+  <Step title="Analyze Both Dimensions">
+    Horizontal and vertical equity are equally important for fair assessment
+  </Step>
+  <Step title="Use Confidence Intervals">
+    Bootstrap methods provide robust statistical inference
+  </Step>
+  <Step title="Monitor Over Time">
+    Track equity metrics across assessment cycles
+  </Step>
+  <Step title="Address Systematic Issues">
+    Statistically significant inequity requires model refinement
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Ratio Studies" icon="chart-line" href="/advanced/ratio-studies">
+    Learn about COD, PRD, and ratio study metrics
+  </Card>
+  <Card title="SHAP Analysis" icon="chart-network" href="/advanced/shap-analysis">
+    Understand model predictions with SHAP values
+  </Card>
+</CardGroup>

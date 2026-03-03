@@ -1,0 +1,397 @@
+---
+title: Ratio Studies
+description: Understanding COD, PRD, PRB and other ratio study metrics from IAAO standards
+---
+
+## Overview
+
+Ratio studies compare assessed values to sale prices, providing essential metrics for evaluating mass appraisal accuracy and uniformity. OpenAVM Kit implements IAAO-standard ratio studies with full statistical rigor.
+
+<Info>
+Ratio studies are the primary tool for measuring assessment performance and demonstrating compliance with professional standards.
+</Info>
+
+## The RatioStudy Class
+
+OpenAVM Kit provides two ratio study classes:
+
+```python
+from openavmkit.ratio_study import RatioStudy, RatioStudyBootstrapped
+
+# Basic ratio study
+rs = RatioStudy(
+    predictions=predicted_values,
+    ground_truth=sale_prices,
+    max_trim=0.25
+)
+
+# With confidence intervals
+rs_boot = RatioStudyBootstrapped(
+    predictions=predicted_values,
+    ground_truth=sale_prices,
+    max_trim=0.25,
+    confidence_interval=0.95,
+    iterations=10000
+)
+```
+
+### Key Attributes
+
+The `RatioStudy` class computes:
+
+- **count**: Number of observations
+- **median_ratio**: Median of prediction/ground_truth ratios
+- **mean_ratio**: Mean of prediction/ground_truth ratios
+- **cod**: Coefficient of Dispersion
+- **cod_trim**: COD after trimming outliers
+- **prd**: Price-Related Differential
+- **prb**: Price-Related Bias
+
+## Coefficient of Dispersion (COD)
+
+COD measures the average deviation from the median ratio:
+
+### Formula
+
+```
+COD = (Average Absolute Deviation / Median Ratio) × 100
+```
+
+### Implementation
+
+From `openavmkit/utilities/stats.py`:
+
+```python
+import numpy as np
+
+def calc_cod(ratios: np.ndarray) -> float:
+    """
+    Calculate Coefficient of Dispersion
+    
+    Parameters
+    ----------
+    ratios : np.ndarray
+        Array of assessment-to-sale ratios
+    
+    Returns
+    -------
+    float
+        COD value (lower is better)
+    """
+    if len(ratios) == 0:
+        return float("nan")
+    
+    median_ratio = np.median(ratios)
+    abs_deviations = np.abs(ratios - median_ratio)
+    avg_deviation = np.mean(abs_deviations)
+    
+    return (avg_deviation / median_ratio) * 100
+```
+
+### Interpretation
+
+<AccordionGroup>
+  <Accordion title="Excellent: COD < 5.0">
+    Exceptional uniformity. Assessments are highly consistent across properties.
+  </Accordion>
+  <Accordion title="Good: COD 5.0-10.0">
+    Strong performance for residential properties. Meets IAAO standards.
+  </Accordion>
+  <Accordion title="Acceptable: COD 10.0-15.0">
+    Acceptable for most residential property. May need improvement for certain segments.
+  </Accordion>
+  <Accordion title="Needs Improvement: COD > 15.0">
+    Significant variation in assessment ratios. Review model and data quality.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+COD standards vary by property type:
+- Single-family residential: Target < 10.0
+- Income-producing properties: Target < 15.0
+- Vacant land: Target < 20.0
+</Note>
+
+## Price-Related Differential (PRD)
+
+PRD detects systematic bias related to property value:
+
+### Formula
+
+```
+PRD = (Mean Ratio) / (Weighted Mean Ratio)
+```
+
+Where weighted mean ratio uses sale prices as weights.
+
+### Implementation
+
+```python
+import numpy as np
+from openavmkit.utilities.data import div_series_z_safe
+
+def calc_prd(predictions: np.ndarray, ground_truth: np.ndarray) -> float:
+    """
+    Calculate Price-Related Differential
+    
+    PRD > 1.0 indicates assessment regressivity (over-assessing low-value properties)
+    PRD < 1.0 indicates assessment progressivity (over-assessing high-value properties)
+    
+    Parameters
+    ----------
+    predictions : np.ndarray
+        Predicted values
+    ground_truth : np.ndarray
+        Actual sale prices
+    
+    Returns
+    -------
+    float
+        PRD value (target is 1.00)
+    """
+    if len(predictions) == 0:
+        return float("nan")
+    
+    ratios = div_series_z_safe(predictions, ground_truth)
+    mean_ratio = np.mean(ratios)
+    
+    # Weighted mean ratio
+    weighted_mean = np.sum(predictions) / np.sum(ground_truth)
+    
+    return mean_ratio / weighted_mean
+```
+
+### Interpretation
+
+| PRD Value | Meaning | Action Required |
+|-----------|---------|----------------|
+| 1.00 | Perfect proportionality | None |
+| 0.98-1.03 | Excellent (IAAO target) | None |
+| 1.03-1.05 | Slight regressivity | Monitor |
+| > 1.05 | Significant regressivity | Model adjustment needed |
+| 0.95-0.98 | Slight progressivity | Monitor |
+| < 0.95 | Significant progressivity | Model adjustment needed |
+
+<Warning>
+**Regressivity (PRD > 1.00)**: Lower-valued properties are assessed at higher percentages than higher-valued properties. This is generally considered unfair.
+
+**Progressivity (PRD < 1.00)**: Higher-valued properties are assessed at higher percentages. Less common but also problematic.
+</Warning>
+
+## Price-Related Bias (PRB)
+
+PRB is an alternative measure of vertical equity based on regression:
+
+### Formula
+
+PRB uses the coefficient from regressing percentage differences on sale prices:
+
+```
+Percentage Difference = (Prediction - Sale Price) / Sale Price
+PRB = coefficient from regression on log(Sale Price)
+```
+
+### Implementation
+
+```python
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+def calc_prb(predictions, ground_truth, confidence_interval=0.95):
+    """
+    Calculate Price-Related Bias
+    
+    Returns
+    -------
+    tuple
+        (prb_value, prb_low, prb_high)
+    """
+    if len(predictions) < 2:
+        return (float("nan"), float("nan"), float("nan"))
+    
+    # Calculate percentage differences
+    pct_diff = (predictions - ground_truth) / ground_truth
+    
+    # Prepare regression data
+    X = np.log(ground_truth).reshape(-1, 1)
+    y = pct_diff
+    
+    # Fit regression
+    model = LinearRegression()
+    model.fit(X, y)
+    
+    prb_value = model.coef_[0]
+    
+    # Calculate confidence interval (bootstrap)
+    # ... bootstrap implementation ...
+    
+    return prb_value, prb_low, prb_high
+```
+
+### Interpretation
+
+- **PRB = 0**: No price-related bias
+- **PRB > 0**: Regressivity (under-assessing high-value properties)
+- **PRB < 0**: Progressivity (over-assessing high-value properties)
+
+**IAAO Standards:**
+- Excellent: -0.05 to +0.05
+- Acceptable: -0.10 to +0.10
+
+## Trimmed vs. Untrimmed Statistics
+
+Ratio studies report both trimmed and untrimmed statistics:
+
+### Why Trim?
+
+Outliers can distort metrics. Trimming removes extreme ratios while retaining the typical distribution:
+
+```python
+from openavmkit.utilities.stats import trim_outlier_ratios
+
+# Trim to interquartile range
+trim_predictions, trim_ground_truth = trim_outlier_ratios(
+    predictions,
+    ground_truth,
+    max_trim=0.25  # No more than 25% trimmed
+)
+
+# Calculate trimmed COD
+trim_ratios = trim_predictions / trim_ground_truth
+cod_trim = calc_cod(trim_ratios)
+```
+
+### Comparing Results
+
+```python
+rs = RatioStudy(predictions, ground_truth, max_trim=0.25)
+
+# Display summary
+df_summary = rs.summary()
+print(df_summary)
+```
+
+Output:
+
+```
+       Data  Count    COD  Med.Ratio
+0  Untrimmed  5,234  12.45      1.024
+1    Trimmed  4,123   8.32      1.018
+```
+
+<Info>
+Trimmed statistics focus on the typical property, while untrimmed statistics include all sales. Both are important for comprehensive assessment.
+</Info>
+
+## Ratio Study Breakdowns
+
+Analyze quality metrics by property characteristics:
+
+### Configuration
+
+```yaml
+analysis:
+  ratio_study:
+    look_back_years: 1
+    breakdowns:
+      - by: property_class
+      - by: neighborhood
+      - by: year_built
+        quantiles: 4
+      - by: sale_price
+        slice_size: 50000
+```
+
+### Running Breakdowns
+
+```python
+from openavmkit.ratio_study import run_and_write_ratio_study_breakdowns
+
+run_and_write_ratio_study_breakdowns(settings)
+```
+
+This generates reports showing COD, median ratio, and confidence intervals for each breakdown category.
+
+## Bootstrap Confidence Intervals
+
+The `RatioStudyBootstrapped` class provides confidence intervals:
+
+```python
+rs = RatioStudyBootstrapped(
+    predictions,
+    ground_truth,
+    max_trim=0.25,
+    confidence_interval=0.95,
+    iterations=10000
+)
+
+print(f"COD: {rs.cod.value:.1f} [{rs.cod.low:.1f}, {rs.cod.high:.1f}]")
+print(f"Median Ratio: {rs.median_ratio.value:.3f}")
+print(f"PRD: {rs.prd.value:.3f} [{rs.prd.low:.3f}, {rs.prd.high:.3f}]")
+```
+
+### Summary Output
+
+```python
+df = rs.summary()
+print(df)
+```
+
+## Vacant vs. Improved Properties
+
+Ratio studies should separate vacant land from improved properties:
+
+```python
+from openavmkit.data import get_vacant_sales
+
+df_vacant = get_vacant_sales(df_sales, settings)
+df_improved = get_vacant_sales(df_sales, settings, invert=True)
+
+# Separate ratio studies
+rs_vacant = RatioStudy(
+    df_vacant["prediction"],
+    df_vacant["sale_price"],
+    max_trim=0.25
+)
+
+rs_improved = RatioStudy(
+    df_improved["prediction"],
+    df_improved["sale_price"],
+    max_trim=0.25
+)
+```
+
+<Note>
+Vacant land typically has higher COD values (20-25) due to greater heterogeneity.
+</Note>
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Recent Sales">
+    Limit analysis to sales within 1-2 years of the assessment date
+  </Step>
+  <Step title="Calculate Both Trimmed and Untrimmed">
+    Trimmed statistics show typical performance; untrimmed shows overall coverage
+  </Step>
+  <Step title="Report Confidence Intervals">
+    Bootstrap methods provide robust uncertainty estimates
+  </Step>
+  <Step title="Analyze by Segments">
+    Calculate separate statistics for different property types and value ranges
+  </Step>
+  <Step title="Monitor PRD and PRB">
+    Vertical equity is as important as overall accuracy
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Equity Studies" icon="scale-balanced" href="/advanced/equity-studies">
+    Learn about horizontal and vertical equity analysis
+  </Card>
+  <Card title="Quality Metrics" icon="chart-simple" href="/advanced/assessment-quality">
+    Explore additional quality evaluation approaches
+  </Card>
+</CardGroup>

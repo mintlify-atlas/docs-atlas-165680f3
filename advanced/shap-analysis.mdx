@@ -1,0 +1,506 @@
+---
+title: SHAP Analysis
+description: Using SHAP values for model explainability and feature importance in mass appraisal
+---
+
+## Overview
+
+SHAP (SHapley Additive exPlanations) values provide model-agnostic explanations for tree-based models. OpenAVM Kit integrates SHAP analysis to help assessors understand which property characteristics drive valuations.
+
+<Info>
+SHAP analysis answers: "Why did the model predict this value for this property?" by breaking down each prediction into feature contributions.
+</Info>
+
+## Why SHAP for Mass Appraisal?
+
+### Model Transparency
+
+- **Regulatory compliance**: Demonstrate how assessments are determined
+- **Taxpayer communication**: Explain individual property values
+- **Model validation**: Verify that models use appropriate features
+
+### Feature Importance
+
+- **Global importance**: Which features matter most overall?
+- **Local explanations**: Why was this specific property valued higher?
+- **Interaction effects**: How do features combine to influence value?
+
+## Getting Started
+
+### Basic SHAP Calculation
+
+```python
+from openavmkit.shap_analysis import get_full_model_shaps
+
+# Calculate SHAP values for all data subsets
+shaps = get_full_model_shaps(
+    model=trained_model,      # XGBoost, LightGBM, or CatBoost model
+    X_train=X_train,
+    X_test=X_test,
+    X_sales=X_sales,
+    X_univ=X_universe,
+    verbose=True
+)
+
+# Access SHAP explanations
+shap_train = shaps["train"]
+shap_test = shaps["test"]
+shap_sales = shaps["sales"]
+shap_univ = shaps["univ"]
+```
+
+### Supported Models
+
+OpenAVM Kit supports SHAP analysis for:
+
+- **XGBoost**: `XGBoostModel`
+- **LightGBM**: `LightGBMModel`  
+- **CatBoost**: `CatBoostModel`
+
+```python
+from openavmkit.utilities.modeling import (
+    XGBoostModel,
+    LightGBMModel,
+    CatBoostModel
+)
+
+# Models automatically work with SHAP
+if isinstance(model, XGBoostModel):
+    print("Using XGBoost TreeExplainer")
+elif isinstance(model, LightGBMModel):
+    print("Using LightGBM native SHAP")
+elif isinstance(model, CatBoostModel):
+    print("Using CatBoost native SHAP")
+```
+
+## SHAP Explanations
+
+A `shap.Explanation` object contains:
+
+- **values**: SHAP values (feature contributions)
+- **base_values**: Base prediction (average)
+- **data**: Original feature values
+- **feature_names**: Feature labels
+
+### Prediction Breakdown
+
+Each prediction equals the base value plus SHAP contributions:
+
+```
+Prediction = base_value + Σ(SHAP values)
+```
+
+Example:
+```python
+import numpy as np
+
+explanation = shaps["test"]
+
+# For the first property
+idx = 0
+base = explanation.base_values[idx]
+contribs = explanation.values[idx]
+prediction = base + np.sum(contribs)
+
+print(f"Base value: ${base:,.0f}")
+print(f"Total SHAP contribution: ${np.sum(contribs):,.0f}")
+print(f"Final prediction: ${prediction:,.0f}")
+```
+
+## Visualization
+
+### Beeswarm Plot
+
+Show global feature importance with value distributions:
+
+```python
+from openavmkit.shap_analysis import plot_full_beeswarm
+
+plot_full_beeswarm(
+    explanation=shaps["test"],
+    title="SHAP Feature Importance",
+    save_path="out/shap_beeswarm.png",
+    wrap_width=20  # Wrap long feature names
+)
+```
+
+**Interpretation:**
+- **Position on x-axis**: SHAP value (impact on prediction)
+- **Color**: Feature value (red = high, blue = low)
+- **Vertical spread**: Distribution of impacts
+
+<Note>
+Beeswarm plots automatically size to the number of features. Wide plots indicate many important features.
+</Note>
+
+### Feature Contributions
+
+For individual properties:
+
+```python
+import shap
+
+# Waterfall plot for a single prediction
+shap.plots.waterfall(
+    shaps["test"][0],  # First test property
+    show=True
+)
+```
+
+This shows step-by-step how features contribute to the final prediction.
+
+### Force Plots
+
+Visualize multiple predictions:
+
+```python
+import shap
+
+# Force plot for first 100 test properties
+shap.plots.force(
+    shaps["test"][:100]
+)
+```
+
+## SHAP Tables
+
+Convert SHAP values to tabular format for analysis:
+
+```python
+from openavmkit.shap_analysis import make_shap_table
+
+# Create detailed breakdown table
+df_shap = make_shap_table(
+    expl=shaps["test"],
+    list_keys=test_keys,
+    list_vars=feature_names,
+    include_pred=True
+)
+
+print(df_shap.head())
+```
+
+Output columns:
+- `key`: Property identifier
+- `base_value`: Model base prediction
+- `[feature_1]` through `[feature_n]`: SHAP contribution of each feature
+- `contribution_sum`: Sum of all contributions (= prediction)
+
+### With Sales Keys
+
+For sales data with transaction IDs:
+
+```python
+df_shap = make_shap_table(
+    expl=shaps["sales"],
+    list_keys=property_keys,
+    list_vars=feature_names,
+    list_keys_sale=sale_keys,  # Transaction IDs
+    include_pred=True
+)
+```
+
+Adds `key_sale` column for joining with sales data.
+
+## Model-Specific Implementation
+
+### XGBoost SHAP
+
+```python
+import shap
+from openavmkit.shap_analysis import _xgboost_shap
+
+# Create TreeExplainer for XGBoost
+explainer = _xgboost_shap(
+    model=xgb_model,
+    X_train=X_train
+)
+
+# Calculate SHAP values
+explanation = explainer(X_test)
+```
+
+**Features:**
+- Uses `tree_path_dependent` for categorical features
+- Automatically enables categorical support in DMatrix
+- Fast computation
+
+### LightGBM SHAP
+
+```python
+from openavmkit.shap_analysis import _lightgbm_shap
+
+# Create TreeExplainer for LightGBM
+explainer = _lightgbm_shap(
+    model=lgb_model,
+    X_train=X_train
+)
+
+# Calculate SHAP values
+explanation = explainer(X_test)
+```
+
+**Features:**
+- Native `pred_contrib` method for speed
+- Handles categorical features automatically
+- Chunked processing for large datasets
+
+<Info>
+LightGBM's native SHAP is much faster than the generic TreeExplainer. OpenAVM Kit automatically uses this optimization.
+</Info>
+
+### CatBoost SHAP
+
+```python
+from openavmkit.shap_analysis import _catboost_shap
+
+# Create TreeExplainer for CatBoost
+explainer = _catboost_shap(
+    model=catboost_model,
+    X_train=X_train
+)
+
+# Calculate with approximate mode for speed
+explanation = explainer(X_test, approximate=True)
+```
+
+**Features:**
+- Uses CatBoost's `get_feature_importance` with `type="ShapValues"`
+- Supports `Approximate` mode for faster computation
+- Handles categorical features natively
+
+### Approximate vs. Exact SHAP
+
+```python
+# Exact SHAP (slower, more accurate)
+shaps_exact = get_full_model_shaps(
+    model=model,
+    X_train=X_train,
+    X_test=X_test,
+    X_sales=X_sales,
+    X_univ=X_universe,
+    verbose=True
+)  # approximate defaults to True for XGBoost/CatBoost
+
+# For very large datasets, approximate is recommended
+```
+
+<Warning>
+Exact SHAP can be slow on large datasets. Use approximate mode for exploratory analysis, then verify with exact mode on subsets.
+</Warning>
+
+## Categorical Features
+
+OpenAVM Kit handles categorical features correctly:
+
+```python
+from openavmkit.utilities.modeling import TreeBasedCategoricalData
+
+# Model has categorical data
+cat_data = model.cat_data
+
+if cat_data is not None:
+    print(f"Categorical features: {cat_data.categorical_cols}")
+    
+    # SHAP automatically uses categorical-aware explainers
+    shaps = get_full_model_shaps(
+        model=model,
+        X_train=X_train,
+        X_test=X_test,
+        X_sales=X_sales,
+        X_univ=X_universe
+    )
+```
+
+## Feature Importance Analysis
+
+### Global Importance
+
+Aggregate SHAP values across all predictions:
+
+```python
+import numpy as np
+import pandas as pd
+
+# Calculate mean absolute SHAP value per feature
+explanation = shaps["test"]
+shap_values = explanation.values
+feature_names = explanation.feature_names
+
+importance = np.abs(shap_values).mean(axis=0)
+
+df_importance = pd.DataFrame({
+    "feature": feature_names,
+    "importance": importance
+}).sort_values("importance", ascending=False)
+
+print(df_importance.head(10))
+```
+
+### Local Importance
+
+For a specific property:
+
+```python
+# Most important features for property at index 42
+idx = 42
+contribs = explanation.values[idx]
+features = explanation.feature_names
+
+df_local = pd.DataFrame({
+    "feature": features,
+    "contribution": contribs
+}).sort_values("contribution", key=abs, ascending=False)
+
+print(f"\nTop contributors for property {idx}:")
+print(df_local.head(10))
+```
+
+### Feature Interactions
+
+SHAP can reveal interactions:
+
+```python
+import shap
+
+# Dependence plot shows interaction between features
+shap.dependence_plot(
+    "living_area_sf",
+    explanation.values,
+    explanation.data,
+    interaction_index="year_built"
+)
+```
+
+## Performance Optimization
+
+### Chunked Processing
+
+For very large datasets, OpenAVM Kit uses chunking:
+
+```python
+# LightGBM automatically chunks large datasets
+from openavmkit.shap_analysis import _lgb_pred_contrib_chunked
+
+contrib = _lgb_pred_contrib_chunked(
+    booster=lgb_model.booster,
+    X=X_universe,
+    chunk_size=10_000,
+    verbose=True,
+    label="universe"
+)
+```
+
+This prevents memory issues with 100,000+ properties.
+
+### Background Samples
+
+Limit background data size:
+
+```python
+from openavmkit.shap_analysis import _calc_shap
+
+# Use 100 background samples instead of full training set
+explanation = _calc_shap(
+    model=model,
+    X_train=X_train,
+    X_to_explain=X_test,
+    background_size=100
+)
+```
+
+<Note>
+Background size trades off between speed and accuracy. 100-500 samples usually suffice for stable SHAP values.
+</Note>
+
+## Practical Applications
+
+### 1. Model Validation
+
+Verify that important features make sense:
+
+```python
+# Check if location, size, and quality drive predictions
+top_features = df_importance.head(10)["feature"].tolist()
+
+expected = ["living_area_sf", "neighborhood", "year_built", "quality"]
+for feat in expected:
+    if feat in top_features:
+        print(f"✓ {feat} is important")
+    else:
+        print(f"⚠ {feat} is not in top 10")
+```
+
+### 2. Appeals Support
+
+Explain specific assessments:
+
+```python
+# Property owner appeals assessment
+appeal_key = "PARCEL123"
+idx = list(property_keys).index(appeal_key)
+
+base = explanation.base_values[idx]
+contribs = explanation.values[idx]
+data = explanation.data[idx]
+
+print(f"Assessment Breakdown for {appeal_key}:")
+print(f"Base value: ${base:,.0f}")
+print("\nFeature contributions:")
+
+for feat, contrib, value in zip(feature_names, contribs, data):
+    if abs(contrib) > 1000:  # Only show significant contributors
+        sign = "+" if contrib > 0 else ""
+        print(f"  {feat} = {value}: {sign}${contrib:,.0f}")
+```
+
+### 3. Market Analysis
+
+Understand local market drivers:
+
+```python
+# What drives value in this neighborhood?
+neighborhood_mask = df_universe["neighborhood"] == "Downtown"
+neighborhood_shaps = shaps["univ"][neighborhood_mask]
+
+# Calculate average SHAP by feature
+avg_shaps = np.abs(neighborhood_shaps.values).mean(axis=0)
+df_neighborhood = pd.DataFrame({
+    "feature": feature_names,
+    "avg_impact": avg_shaps
+}).sort_values("avg_impact", ascending=False)
+
+print(f"\nKey value drivers in Downtown:")
+print(df_neighborhood.head(10))
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Calculate Once, Use Often">
+    SHAP computation is expensive. Calculate once and save results for multiple analyses.
+  </Step>
+  <Step title="Use Native Methods">
+    LightGBM and CatBoost have optimized SHAP implementations. Let OpenAVM Kit use them automatically.
+  </Step>
+  <Step title="Validate Feature Importance">
+    Ensure top features align with appraisal theory and local market knowledge.
+  </Step>
+  <Step title="Explain Key Predictions">
+    Use SHAP to document how assessments were determined for appeals and audits.
+  </Step>
+  <Step title="Monitor Over Time">
+    Track feature importance across assessment cycles to detect market shifts.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Land Valuation" icon="tree" href="/advanced/land-valuation">
+    Learn about vacant and hedonic land value modeling
+  </Card>
+  <Card title="Quality Metrics" icon="chart-simple" href="/advanced/assessment-quality">
+    Explore assessment quality evaluation approaches
+  </Card>
+</CardGroup>

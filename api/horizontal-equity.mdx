@@ -1,0 +1,298 @@
+---
+title: Horizontal Equity
+description: Horizontal equity analysis using clustering to measure uniformity of assessments
+---
+
+The horizontal equity module analyzes whether similar properties are assessed uniformly. It groups similar properties into clusters and measures the dispersion of assessed values within each cluster.
+
+## Classes
+
+### HorizontalEquityStudy
+
+Perform horizontal equity analysis and summarize the results.
+
+**Attributes:**
+- `summary` (HorizontalEquitySummary): Overall summary statistics
+- `cluster_summaries` (dict[str, HorizontalEquityClusterSummary]): Dictionary mapping cluster IDs to their summaries
+
+#### `__init__`
+
+```python
+HorizontalEquityStudy(
+    df: pd.DataFrame,
+    field_cluster: str,
+    field_value: str
+)
+```
+
+<ParamField path="df" type="pd.DataFrame">
+  Input DataFrame containing data for horizontal equity analysis
+</ParamField>
+
+<ParamField path="field_cluster" type="str">
+  Column name indicating cluster membership
+</ParamField>
+
+<ParamField path="field_value" type="str">
+  Column name of the values to analyze
+</ParamField>
+
+---
+
+### HorizontalEquitySummary
+
+Summary statistics for horizontal equity analysis.
+
+**Attributes:**
+- `rows` (int): Total number of rows in the input DataFrame
+- `clusters` (int): Total number of clusters identified
+- `min_chd` (float): Minimum CHD (Coefficient of Horizontal Dispersion) value of any cluster
+- `max_chd` (float): Maximum CHD value of any cluster
+- `median_chd` (float): Median CHD value of all clusters
+- `p05_chd` (float): 5th percentile CHD value
+- `p25_chd` (float): 25th percentile CHD value
+- `p75_chd` (float): 75th percentile CHD value
+- `p95_chd` (float): 95th percentile CHD value
+
+#### `__init__`
+
+```python
+HorizontalEquitySummary(
+    rows: int,
+    clusters: int,
+    min_chd: float,
+    max_chd: float,
+    median_chd: float,
+    p05_chd: float,
+    p25_chd: float,
+    p75_chd: float,
+    p95_chd: float
+)
+```
+
+<ParamField path="rows" type="int">
+  Total number of rows in the DataFrame
+</ParamField>
+
+<ParamField path="clusters" type="int">
+  Total number of clusters
+</ParamField>
+
+<ParamField path="min_chd" type="float">
+  Minimum CHD value
+</ParamField>
+
+<ParamField path="max_chd" type="float">
+  Maximum CHD value
+</ParamField>
+
+<ParamField path="median_chd" type="float">
+  Median CHD value
+</ParamField>
+
+<ParamField path="p05_chd" type="float">
+  5th percentile CHD value
+</ParamField>
+
+<ParamField path="p25_chd" type="float">
+  25th percentile CHD value
+</ParamField>
+
+<ParamField path="p75_chd" type="float">
+  75th percentile CHD value
+</ParamField>
+
+<ParamField path="p95_chd" type="float">
+  95th percentile CHD value
+</ParamField>
+
+#### `print()`
+
+Generate a formatted DataFrame summary of the horizontal equity statistics.
+
+<ResponseField name="return" type="pd.DataFrame">
+  Transposed DataFrame with all CHD statistics and cluster information
+</ResponseField>
+
+---
+
+### HorizontalEquityClusterSummary
+
+Summary for an individual horizontal equity cluster.
+
+**Attributes:**
+- `id` (str): Identifier of the cluster
+- `count` (int): Number of records in the cluster
+- `chd` (float): CHD value for the cluster
+- `min` (float): Minimum value in the cluster
+- `max` (float): Maximum value in the cluster
+- `median` (float): Median value in the cluster
+
+#### `__init__`
+
+```python
+HorizontalEquityClusterSummary(
+    id: str,
+    count: int,
+    chd: float,
+    min: float,
+    max: float,
+    median: float
+)
+```
+
+<ParamField path="id" type="str">
+  Cluster identifier
+</ParamField>
+
+<ParamField path="count" type="int">
+  Number of records in the cluster
+</ParamField>
+
+<ParamField path="chd" type="float">
+  CHD value for the cluster
+</ParamField>
+
+<ParamField path="min" type="float">
+  Minimum value in the cluster
+</ParamField>
+
+<ParamField path="max" type="float">
+  Maximum value in the cluster
+</ParamField>
+
+<ParamField path="median" type="float">
+  Median value in the cluster
+</ParamField>
+
+---
+
+## Functions
+
+### mark_horizontal_equity_clusters_per_model_group_sup
+
+Mark horizontal equity clusters on the 'universe' DataFrame of a SalesUniversePair.
+
+Updates the 'universe' DataFrame with horizontal equity clusters by calling `mark_horizontal_equity_clusters` and then sets the updated DataFrame in `sup`.
+
+```python
+mark_horizontal_equity_clusters_per_model_group_sup(
+    sup: SalesUniversePair,
+    settings: dict,
+    verbose: bool = False,
+    use_cache: bool = True,
+    do_land_clusters: bool = True,
+    do_impr_clusters: bool = True
+) -> SalesUniversePair
+```
+
+<ParamField path="sup" type="SalesUniversePair">
+  SalesUniversePair containing sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints progress information
+</ParamField>
+
+<ParamField path="use_cache" type="bool" default="True">
+  If True, uses cached DataFrame if available
+</ParamField>
+
+<ParamField path="do_land_clusters" type="bool" default="True">
+  If True, marks land horizontal equity clusters
+</ParamField>
+
+<ParamField path="do_impr_clusters" type="bool" default="True">
+  If True, marks improvement horizontal equity clusters
+</ParamField>
+
+<ResponseField name="return" type="SalesUniversePair">
+  Updated SalesUniversePair with marked horizontal equity clusters
+</ResponseField>
+
+---
+
+### mark_horizontal_equity_clusters
+
+Compute and mark horizontal equity clusters in the DataFrame.
+
+Uses clustering (via `make_clusters`) based on a location field and categorical/numeric fields specified in settings to generate a horizontal equity cluster ID which is stored in the specified `id_name` column.
+
+```python
+mark_horizontal_equity_clusters(
+    df: pd.DataFrame,
+    settings: dict,
+    verbose: bool = False,
+    settings_object: str = "horizontal_equity",
+    id_name: str = "he_id",
+    output_folder: str = "",
+    t: TimingData = None
+) -> pd.DataFrame
+```
+
+<ParamField path="df" type="pd.DataFrame">
+  Input DataFrame
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints progress information
+</ParamField>
+
+<ParamField path="settings_object" type="str" default="horizontal_equity">
+  The settings object to use for horizontal equity analysis
+</ParamField>
+
+<ParamField path="id_name" type="str" default="he_id">
+  Name of the column to store the horizontal equity cluster ID
+</ParamField>
+
+<ParamField path="output_folder" type="str" default="">
+  Output folder path (stores information about the clusters for later use)
+</ParamField>
+
+<ParamField path="t" type="TimingData" default="None">
+  TimingData object to record performance metrics
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame with a new cluster ID column (id_name)
+</ResponseField>
+
+---
+
+## Metrics
+
+### Coefficient of Horizontal Dispersion (CHD)
+
+The CHD is analogous to the Coefficient of Dispersion (COD) but measures dispersion within clusters of similar properties rather than across all properties.
+
+**Formula:**
+```
+CHD = (Average Absolute Deviation from Median / Median) × 100
+```
+
+where the median and deviations are calculated within each cluster of similar properties.
+
+**Interpretation:**
+- Lower CHD indicates more uniform assessments for similar properties
+- CHD is calculated for each cluster separately
+- The overall horizontal equity is assessed by examining the distribution of CHD values across all clusters
+- High CHD in specific clusters indicates properties that should be similar are being assessed inconsistently
+
+**Clustering Approach:**
+
+Properties are grouped into clusters based on:
+- Location (e.g., neighborhood, market area)
+- Categorical characteristics (e.g., property type, quality grade)
+- Numeric characteristics (e.g., building area, land area)
+- Vacant vs. improved status
+
+This ensures that properties within each cluster are genuinely comparable, making the dispersion measurement meaningful.

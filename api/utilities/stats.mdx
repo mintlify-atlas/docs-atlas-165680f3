@@ -1,0 +1,484 @@
+---
+title: "stats"
+description: "Statistical utilities for sales ratio studies and model validation"
+---
+
+The `stats` module provides comprehensive statistical functions for automated valuation modeling, including ratio study statistics (COD, PRD, PRB), bootstrap confidence intervals, outlier detection, and variable selection utilities.
+
+## Ratio Study Statistics
+
+### calc_cod()
+
+Calculate the Coefficient of Dispersion (COD) for an array of values.
+
+```python
+from openavmkit.utilities.stats import calc_cod
+import numpy as np
+
+values = np.array([100, 105, 95, 110, 90])
+cod = calc_cod(values)
+```
+
+<ParamField path="values" type="numpy.ndarray" required>
+  Array of numeric values
+</ParamField>
+
+<ResponseField name="cod" type="float">
+  The COD percentage. Returns `nan` if array is empty, `0.0` if all values are zero, and `inf` if median is zero but not all values are zero.
+</ResponseField>
+
+---
+
+### calc_ratio_stats_bootstrap()
+
+Calculate ratio study statistics (Median ratio, Mean ratio, COD, PRD) with bootstrap percentile confidence intervals, following IAAO definitions.
+
+```python
+from openavmkit.utilities.stats import calc_ratio_stats_bootstrap
+import numpy as np
+
+predictions = np.array([95000, 102000, 98000, 105000])
+ground_truth = np.array([100000, 100000, 100000, 100000])
+
+stats = calc_ratio_stats_bootstrap(
+    predictions, 
+    ground_truth,
+    confidence_interval=0.95,
+    iterations=10000,
+    seed=777
+)
+```
+
+<ParamField path="predictions" type="numpy.ndarray" required>
+  Array of predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="numpy.ndarray" required>
+  Array of corresponding ground truth (e.g., sale price) values
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" default="0.95">
+  The size of the confidence interval (e.g., 0.95 = 95% confidence)
+</ParamField>
+
+<ParamField path="iterations" type="int" default="10000">
+  The number of bootstrap iterations to perform
+</ParamField>
+
+<ParamField path="seed" type="int" default="777">
+  Random seed for reproducibility
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  Dictionary containing:
+  - `median_ratio`: ConfidenceStat object with point estimate and confidence bounds
+  - `mean_ratio`: ConfidenceStat object
+  - `cod`: ConfidenceStat object (COD = 100 * mean(|ri - median(r)|) / median(r))
+  - `prd`: ConfidenceStat object (PRD = mean(r) / weighted_mean(r))
+  
+  Returns `None` if no valid observations remain after filtering.
+</ResponseField>
+
+---
+
+### calc_prd()
+
+Calculate the Price Related Differential (PRD).
+
+```python
+from openavmkit.utilities.stats import calc_prd
+
+prd = calc_prd(predictions, ground_truth)
+```
+
+<ParamField path="predictions" type="numpy.ndarray" required>
+  Array of predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="numpy.ndarray" required>
+  Array of ground truth values
+</ParamField>
+
+<ResponseField name="prd" type="float">
+  The PRD value, computed as the ratio of the mean ratio to the weighted mean ratio
+</ResponseField>
+
+---
+
+### calc_prb()
+
+Calculate the Price Related Bias (PRB) metric using a regression-based approach.
+
+```python
+from openavmkit.utilities.stats import calc_prb
+
+prb, lower, upper = calc_prb(predictions, ground_truth, confidence_interval=0.95)
+```
+
+<ParamField path="predictions" type="numpy.ndarray" required>
+  Array of predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="numpy.ndarray" required>
+  Array of ground truth values
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" default="0.95">
+  Desired confidence interval
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float, float]">
+  Tuple containing:
+  - PRB value
+  - Lower bound of the confidence interval
+  - Upper bound of the confidence interval
+</ResponseField>
+
+---
+
+## Bootstrap Functions
+
+### calc_cod_bootstrap()
+
+Calculate COD using bootstrapping to generate confidence intervals.
+
+```python
+from openavmkit.utilities.stats import calc_cod_bootstrap
+
+median_cod, lower_bound, upper_bound = calc_cod_bootstrap(
+    values,
+    confidence_interval=0.95,
+    iterations=10000,
+    seed=777
+)
+```
+
+<ParamField path="values" type="numpy.ndarray" required>
+  Array of numeric values
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" default="0.95">
+  The desired confidence level
+</ParamField>
+
+<ParamField path="iterations" type="int" default="10000">
+  Number of bootstrap iterations
+</ParamField>
+
+<ParamField path="seed" type="int" default="777">
+  Random seed for reproducibility
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float, float]">
+  Tuple containing the median COD, lower bound, and upper bound of the confidence interval
+</ResponseField>
+
+---
+
+### calc_prd_bootstrap()
+
+Calculate PRD with bootstrapping.
+
+```python
+from openavmkit.utilities.stats import calc_prd_bootstrap
+
+median_prd, lower_bound, upper_bound = calc_prd_bootstrap(
+    predictions,
+    ground_truth,
+    confidence_interval=0.95,
+    iterations=10000,
+    seed=777
+)
+```
+
+<ParamField path="predictions" type="numpy.ndarray" required>
+  Array of predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="numpy.ndarray" required>
+  Array of ground truth values
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" default="0.95">
+  The desired confidence level
+</ParamField>
+
+<ParamField path="iterations" type="int" default="10000">
+  Number of bootstrap iterations
+</ParamField>
+
+<ParamField path="seed" type="int" default="777">
+  Random seed for reproducibility
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float, float]">
+  Tuple containing median PRD, the lower bound, and upper bound of the confidence interval
+</ResponseField>
+
+---
+
+## Outlier Detection
+
+### trim_outliers()
+
+Trim outliers using IQR fences per IAAO guidance, with a maximum trim cap.
+
+```python
+from openavmkit.utilities.stats import trim_outliers
+
+trimmed = trim_outliers(values, max_percent=0.10, iqr_factor=1.5)
+```
+
+<ParamField path="values" type="numpy.ndarray" required>
+  1D numeric array with no NaNs allowed
+</ParamField>
+
+<ParamField path="max_percent" type="float" default="0.10">
+  Maximum fraction to remove (e.g., 0.10 = 10%)
+</ParamField>
+
+<ParamField path="iqr_factor" type="float" default="1.5">
+  1.5 for standard outliers, 3.0 for extreme outliers
+</ParamField>
+
+<ResponseField name="return" type="numpy.ndarray">
+  Trimmed array according to IQR rules or symmetric quantile cut if IQR-based trimming exceeds the cap
+</ResponseField>
+
+---
+
+### trim_outliers_mask()
+
+Same as `trim_outliers()` but returns a boolean mask instead of trimmed values.
+
+```python
+from openavmkit.utilities.stats import trim_outliers_mask
+
+mask = trim_outliers_mask(values, max_percent=0.10, iqr_factor=1.5)
+trimmed = values[mask]
+```
+
+<ParamField path="values" type="numpy.ndarray" required>
+  1D numeric array with no NaNs allowed
+</ParamField>
+
+<ParamField path="max_percent" type="float" default="0.10">
+  Maximum fraction to remove
+</ParamField>
+
+<ParamField path="iqr_factor" type="float" default="1.5">
+  IQR multiplier for fence calculation
+</ParamField>
+
+<ResponseField name="return" type="numpy.ndarray">
+  Boolean array where `True` indicates values within the quantile bounds
+</ResponseField>
+
+---
+
+## Variable Selection
+
+### calc_correlations()
+
+Calculate correlations and iteratively drop variables with low combined scores.
+
+```python
+from openavmkit.utilities.stats import calc_correlations
+
+result = calc_correlations(X, threshold=0.1, do_plots=False)
+initial_scores = result['initial']
+final_scores = result['final']
+bad_vars = result['bad_vars']
+```
+
+<ParamField path="X" type="pandas.DataFrame" required>
+  Input DataFrame containing the variables to evaluate
+</ParamField>
+
+<ParamField path="threshold" type="float" default="0.1">
+  Minimum acceptable combined score for variables. Variables with a score below this value will be dropped.
+</ParamField>
+
+<ParamField path="do_plots" type="bool" default="False">
+  If True, plot the initial and final correlation heatmaps
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  Dictionary with keys:
+  - `initial`: pandas.Series of combined scores from the first iteration
+  - `final`: pandas.Series of combined scores after dropping low-scoring variables
+  - `bad_vars`: list of variables that should be dropped
+</ResponseField>
+
+---
+
+### calc_vif()
+
+Calculate the Variance Inflation Factor (VIF) for each variable in a DataFrame.
+
+```python
+from openavmkit.utilities.stats import calc_vif
+
+vif_data = calc_vif(X)
+```
+
+<ParamField path="X" type="pandas.DataFrame" required>
+  Input features DataFrame
+</ParamField>
+
+<ResponseField name="return" type="pandas.DataFrame">
+  DataFrame with columns:
+  - `variable`: Name of each feature in X
+  - `vif`: Variance Inflation Factor value for that feature
+</ResponseField>
+
+---
+
+### calc_vif_recursive_drop()
+
+Recursively drop variables with a Variance Inflation Factor (VIF) exceeding the threshold.
+
+```python
+from openavmkit.utilities.stats import calc_vif_recursive_drop
+
+result = calc_vif_recursive_drop(X, threshold=10.0, settings=None)
+initial_vif = result['initial']
+final_vif = result['final']
+```
+
+<ParamField path="X" type="pandas.DataFrame" required>
+  Input features DataFrame
+</ParamField>
+
+<ParamField path="threshold" type="float" default="10.0">
+  Maximum acceptable VIF. Variables with VIF above this threshold will be removed.
+</ParamField>
+
+<ParamField path="settings" type="dict" default="None">
+  Settings dictionary containing field classifications, if needed for VIF computation
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  Dictionary with keys:
+  - `initial`: pandas.DataFrame of VIF values before dropping variables
+  - `final`: pandas.DataFrame of VIF values after recursively dropping high-VIF variables
+</ResponseField>
+
+---
+
+## Model Performance
+
+### calc_mse()
+
+Calculate the Mean Squared Error (MSE) between predictions and ground truth.
+
+```python
+from openavmkit.utilities.stats import calc_mse
+
+mse = calc_mse(predictions, ground_truth)
+```
+
+<ParamField path="prediction" type="numpy.ndarray" required>
+  Array of predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="numpy.ndarray" required>
+  Array of true values
+</ParamField>
+
+<ResponseField name="mse" type="float">
+  The MSE value
+</ResponseField>
+
+---
+
+### calc_mse_r2_adj_r2()
+
+Calculate the Mean Squared Error (MSE), R-squared, and adjusted R-squared.
+
+```python
+from openavmkit.utilities.stats import calc_mse_r2_adj_r2
+
+mse, r2, adj_r2 = calc_mse_r2_adj_r2(predictions, ground_truth, num_vars=5)
+```
+
+<ParamField path="predictions" type="numpy.ndarray" required>
+  Array of predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="numpy.ndarray" required>
+  Array of true values
+</ParamField>
+
+<ParamField path="num_vars" type="int" required>
+  Number of independent variables used to produce the predictions
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float, float]">
+  Tuple containing:
+  - The MSE value
+  - The R-squared value
+  - The adjusted R-squared value
+</ResponseField>
+
+---
+
+### calc_cross_validation_score()
+
+Calculate cross-validation score using negative mean squared error.
+
+```python
+from openavmkit.utilities.stats import calc_cross_validation_score
+
+mse = calc_cross_validation_score(X, y)
+```
+
+<ParamField path="X" type="pandas.DataFrame or numpy.ndarray" required>
+  Input features for modeling
+</ParamField>
+
+<ParamField path="y" type="pandas.Series or numpy.ndarray" required>
+  Target variable
+</ParamField>
+
+<ResponseField name="mse" type="float">
+  The mean cross-validated mean squared error (positive value)
+</ResponseField>
+
+---
+
+## Helper Classes
+
+### ConfidenceStat
+
+A class representing any statistic along with its confidence interval bounds.
+
+```python
+from openavmkit.utilities.stats import ConfidenceStat
+
+stat = ConfidenceStat(
+    value=1.05,
+    confidence_interval=0.95,
+    low=1.02,
+    high=1.08
+)
+
+print(f"Value: {stat.value}")
+print(f"95% CI: [{stat.low}, {stat.high}]")
+```
+
+<ParamField path="value" type="float" required>
+  The base value of the statistic
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" required>
+  The % value of the confidence interval (e.g., 0.95 for 95% confidence interval)
+</ParamField>
+
+<ParamField path="low" type="float" required>
+  The lower bound of the confidence interval
+</ParamField>
+
+<ParamField path="high" type="float" required>
+  The upper bound of the confidence interval
+</ParamField>

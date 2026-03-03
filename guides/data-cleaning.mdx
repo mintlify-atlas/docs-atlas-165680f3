@@ -1,0 +1,362 @@
+---
+title: Data Cleaning
+description: Validating sales data and preparing for modeling with sales scrutiny and filtering
+---
+
+Data cleaning prepares your assembled data for modeling by validating sales, filling gaps, and filtering out invalid transactions. This ensures only high-quality, market-reflective sales are used for training.
+
+## Why Clean Data?
+
+Raw sales data often contains:
+
+- **Non-market transactions**: Family transfers, estate sales, foreclosures
+- **Invalid prices**: Zero or negative sale prices, missing values
+- **Outdated sales**: Transactions too old to reflect current market
+- **Data gaps**: Missing property characteristics needed for modeling
+
+## The Cleaning Pipeline
+
+The cleaning process follows these steps:
+
+<Steps>
+
+### Load assembled data
+
+```python 02-clean.ipynb:155-156
+sales_univ_pair = read_pickle("out/1-assemble-sup")
+```
+
+### Fill unknown values
+
+```python 02-clean.ipynb:490-491
+sales_univ_pair = fill_unknown_values_sup(sales_univ_pair, settings)
+```
+
+### Cluster for equity analysis
+
+```python 02-clean.ipynb:526-532
+sales_univ_pair = mark_horizontal_equity_clusters_per_model_group_sup(
+    sup=sales_univ_pair,
+    settings=settings,
+    verbose=verbose
+)
+```
+
+### Process and validate sales
+
+```python pipeline.py:819-872
+sales_univ_pair = process_sales(
+    sup=sales_univ_pair,
+    settings=settings,
+    verbose=verbose
+)
+```
+
+### Run sales scrutiny
+
+```python 02-clean.ipynb
+sales_univ_pair = run_sales_scrutiny(
+    sup=sales_univ_pair,
+    settings=settings,
+    drop_cluster_outliers=False,
+    drop_heuristic_outliers=True,
+    verbose=verbose
+)
+```
+
+</Steps>
+
+## Sales Validation
+
+The `clean_valid_sales()` function performs initial validation:
+
+```python cleaning.py:18-184
+def clean_valid_sales(sup: SalesUniversePair, settings: dict):
+    """Clean and validate sales data.
+    
+    - Filters by date range
+    - Removes invalid prices (zero, negative, null)
+    - Checks vacancy status consistency
+    - Marks sales valid for ratio studies
+    """
+```
+
+### What Gets Filtered
+
+<Tabs>
+  <Tab title="By Price">
+    Sales are marked invalid if:
+    - Sale price is zero
+    - Sale price is negative
+    - Sale price is null/missing
+    
+    ```python cleaning.py:88-92
+    # sale prices of 0 and negative and null are invalid
+    df_sales.loc[
+        df_sales["sale_price"].isna() | df_sales["sale_price"].le(0), "valid_sale"
+    ] = False
+    ```
+  </Tab>
+  
+  <Tab title="By Date">
+    Sales outside the configured date range are excluded:
+    
+    ```json settings.json
+    {
+      "modeling": {
+        "metadata": {
+          "use_sales_from": {
+            "improved": 2019,
+            "vacant": 2019
+          }
+        }
+      }
+    }
+    ```
+    
+    This uses only sales from 2019 onwards.
+  </Tab>
+  
+  <Tab title="By Validity">
+    Sales marked as invalid in source data are excluded:
+    
+    ```python cleaning.py:76-86
+    df_sales.loc[
+        df_sales["sale_year"].lt(oldest_sale_threshold)
+        & df_sales["vacant_sale"].eq(False),
+        "valid_sale",
+    ] = False
+    ```
+  </Tab>
+</Tabs>
+
+### Ratio Study Validity
+
+Two validity flags are created:
+
+**`valid_for_ratio_study`**: Sale is valid AND vacancy status matches current parcel status
+
+```python cleaning.py:127-134
+df_sales.loc[
+    df_sales["valid_sale"] & df_sales["vacant_sale"].eq(df_sales["univ_is_vacant"]),
+    "valid_for_ratio_study",
+] = True
+```
+
+**`valid_for_land_ratio_study`**: Sale is valid AND was vacant at time of sale
+
+```python cleaning.py:136-144
+df_sales.loc[
+    df_sales["valid_sale"] & df_sales["vacant_sale"].eq(True),
+    "valid_for_land_ratio_study",
+] = True
+```
+
+## Filtering Invalid Sales
+
+Use custom filters to exclude non-market transactions:
+
+```python cleaning.py:228-293
+def filter_invalid_sales(sup: SalesUniversePair, settings: dict, verbose: bool = False):
+    """Filter out invalid sales based on configurable conditions.
+    
+    Applies user-defined filters to identify:
+    - Non-arms-length transactions
+    - Family transfers
+    - Unusual sale types
+    """
+```
+
+### Configuration Example
+
+```json settings.json
+{
+  "data": {
+    "process": {
+      "invalid_sales": {
+        "enabled": true,
+        "filter": [
+          {
+            "field": "sale_type",
+            "operator": "in",
+            "value": ["Estate Sale", "Family Transfer", "Foreclosure"]
+          },
+          {
+            "field": "deed_type",
+            "operator": "==",
+            "value": "Gift"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+This excludes:
+- Estate sales, family transfers, and foreclosures
+- Gift deeds (non-market transactions)
+
+## Sales Scrutiny
+
+Sales scrutiny identifies outlier transactions that don't reflect market value using statistical clustering.
+
+### Heuristic Method
+
+Applies rule-based filters to flag suspicious sales:
+
+```python
+sales_univ_pair = run_heuristics(
+    sup=sales_univ_pair,
+    settings=settings,
+    drop_outliers=True,
+    verbose=verbose
+)
+```
+
+**Common heuristics:**
+- Sales far from typical price ranges
+- Unusually short or long time on market
+- Sales between related parties
+
+### Cluster Method
+
+Groups similar properties and identifies price outliers within each cluster:
+
+```python pipeline.py:1030-1082
+def run_sales_scrutiny(
+    sup: SalesUniversePair,
+    settings: dict,
+    drop_cluster_outliers: bool = False,
+    drop_heuristic_outliers: bool = True,
+    verbose: bool = False
+):
+    """Run sales scrutiny analysis.
+    
+    1. Apply heuristic filters
+    2. Drop manually excluded sales
+    3. Cluster-based outlier detection
+    """
+```
+
+**Configuration:**
+
+```json settings.json
+{
+  "analysis": {
+    "sales_scrutiny": {
+      "clusters_enabled": true,
+      "heuristics_enabled": true,
+      "invalid_key_file": "in/invalid_sales.csv"
+    }
+  }
+}
+```
+
+<Warning>
+Be cautious with `drop_cluster_outliers=True`. This permanently removes sales from your dataset. Start with `False` to review flagged sales first.
+</Warning>
+
+## Filling Unknown Values
+
+Models cannot handle missing data, so gaps must be filled:
+
+```python cleaning.py:187-225
+def fill_unknown_values_sup(sup: SalesUniversePair, settings: dict):
+    """Fill unknown values with defaults specified in settings.
+    
+    - Universe: Fill all characteristics
+    - Sales: Fill only sale-specific metadata
+    """
+```
+
+### Configuration
+
+Define fill values in your data dictionary:
+
+```json settings.json
+{
+  "data": {
+    "dictionary": {
+      "characteristics": {
+        "numeric": {
+          "bldg_area_finished_sqft": {
+            "fill_value": 0
+          },
+          "bldg_year_built": {
+            "fill_value": 1950
+          }
+        },
+        "categorical": {
+          "bldg_type": {
+            "fill_value": "UNKNOWN"
+          }
+        },
+        "boolean": {
+          "has_garage": {
+            "fill_value": false
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+<Tip>
+Use sensible defaults that represent "typical" or "neutral" values rather than statistical means, which can introduce bias.
+</Tip>
+
+## Output Files
+
+Cleaned data is written to:
+
+- `out/2-clean-sup.pickle` - Complete cleaned SalesUniversePair
+- `out/look/2-clean-universe.parquet` - Cleaned universe data
+- `out/look/2-clean-sales-hydrated.parquet` - Cleaned sales with characteristics
+- `out/sales_scrutiny/` - Sales scrutiny reports and flagged sales
+
+## Validation Checklist
+
+Before proceeding to modeling, verify:
+
+<Steps>
+
+### Check sales counts
+
+```python
+print(f"Valid sales: {len(sup.sales[sup.sales['valid_sale'] == True])}")
+print(f"Valid for ratio study: {len(sup.sales[sup.sales['valid_for_ratio_study'] == True])}")
+```
+
+### Review excluded sales
+
+Check `out/sales_scrutiny/` for reports on excluded sales
+
+### Examine data quality
+
+```python
+examine_sup(sales_univ_pair, settings)
+```
+
+Look for:
+- High non-null percentages for key fields
+- Reasonable value distributions
+- No unexpected missing data
+
+### Visualize on map
+
+Load parquet files in GIS software to spot spatial patterns
+
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Modeling" icon="brain" href="/guides/modeling">
+    Build predictive models with your cleaned data
+  </Card>
+  <Card title="Configuration Reference" icon="book" href="/configuration/settings">
+    Explore all cleaning and validation options
+  </Card>
+</CardGroup>

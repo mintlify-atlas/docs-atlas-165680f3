@@ -1,0 +1,329 @@
+---
+title: Income Approach
+description: Discounted cash flow analysis and income capitalization functions
+---
+
+The income module implements income approach valuation methods including discounted cash flow (DCF) analysis, capitalization rate calculations, and internal rate of return (IRR) derivation for commercial real estate.
+
+## Core Functions
+
+### derive_prices
+
+```python
+derive_prices(
+    target_irr: float,
+    exit_cap_rate: float,
+    entry_noi: float,
+    noi_growth: float,
+    holding_period: int
+) -> tuple[float, float]
+```
+
+Calculate entry and exit prices using a discounted cash flow (DCF) model.
+
+This function implements a standard DCF analysis where annual NOI cash flows are discounted at the target IRR, and the property is sold at the end of the holding period based on the exit cap rate.
+
+<ParamField path="target_irr" type="float" required>
+  Target internal rate of return as a decimal (e.g., 0.10 for 10%)
+</ParamField>
+
+<ParamField path="exit_cap_rate" type="float" required>
+  Exit capitalization rate as a decimal (e.g., 0.06 for 6%)
+</ParamField>
+
+<ParamField path="entry_noi" type="float" required>
+  Net operating income at purchase (NOI₀)
+</ParamField>
+
+<ParamField path="noi_growth" type="float" required>
+  Expected annual NOI growth rate as a decimal (e.g., 0.03 for 3%)
+</ParamField>
+
+<ParamField path="holding_period" type="int" required>
+  Holding period in years
+</ParamField>
+
+<ResponseField name="entry_price" type="float">
+  The calculated purchase price based on DCF analysis
+</ResponseField>
+
+<ResponseField name="exit_price" type="float">
+  The expected sale price at the end of the holding period
+</ResponseField>
+
+**DCF Equation:**
+```
+Entry Price = Σₜ₌₁ᴴ [NOI₀ × (1 + g)ᵗ / (1 + IRR)ᵗ]
+            + [NOI₀ × (1 + g)ᴴ⁺¹ / exit_cap] / (1 + IRR)ᴴ
+
+Exit Price = NOI₀ × (1 + g)ᴴ / exit_cap
+```
+
+---
+
+### derive_irr
+
+```python
+derive_irr(
+    entry_price: float,
+    exit_price: float,
+    entry_cap_rate: float,
+    noi_growth: float,
+    holding_period: int
+) -> float
+```
+
+Calculate the implied internal rate of return given observed entry and exit prices.
+
+This function uses a numerical solver to find the IRR that makes the net present value of all cash flows equal to zero.
+
+<ParamField path="entry_price" type="float" required>
+  Actual purchase price of the property
+</ParamField>
+
+<ParamField path="exit_price" type="float" required>
+  Observed sale price at end of holding period
+</ParamField>
+
+<ParamField path="entry_cap_rate" type="float" required>
+  Entry capitalization rate as a decimal (e.g., 0.06 for 6%)
+</ParamField>
+
+<ParamField path="noi_growth" type="float" required>
+  Annual NOI growth rate as a decimal
+</ParamField>
+
+<ParamField path="holding_period" type="int" required>
+  Holding period in years
+</ParamField>
+
+<ResponseField name="irr" type="float">
+  The implied IRR as a decimal
+</ResponseField>
+
+**Method:** Uses Brent's method (`scipy.optimize.brentq`) to solve the DCF equation for IRR.
+
+---
+
+### derive_noi_growth
+
+```python
+derive_noi_growth(
+    target_irr: float,
+    exit_cap_rate: float,
+    entry_price: float,
+    entry_cap_rate: float,
+    holding_period: int,
+    lower_bound: float = -0.10,
+    upper_bound: float = 0.2
+) -> float
+```
+
+Calculate the implied NOI growth rate given observed prices and target returns.
+
+<ParamField path="target_irr" type="float" required>
+  Target internal rate of return as a decimal
+</ParamField>
+
+<ParamField path="exit_cap_rate" type="float" required>
+  Exit capitalization rate as a decimal
+</ParamField>
+
+<ParamField path="entry_price" type="float" required>
+  Observed entry price
+</ParamField>
+
+<ParamField path="entry_cap_rate" type="float" required>
+  Entry capitalization rate as a decimal
+</ParamField>
+
+<ParamField path="holding_period" type="int" required>
+  Holding period in years
+</ParamField>
+
+<ParamField path="lower_bound" type="float" default="-0.10">
+  Lower bound for NOI growth search (e.g., -10%)
+</ParamField>
+
+<ParamField path="upper_bound" type="float" default="0.2">
+  Upper bound for NOI growth search (e.g., 20%)
+</ParamField>
+
+<ResponseField name="noi_growth" type="float">
+  Implied annual NOI growth rate as a decimal
+</ResponseField>
+
+---
+
+### derive_irr_df
+
+```python
+derive_irr_df(
+    df: pd.DataFrame,
+    hist_cap_rates: dict,
+    hist_noi_growths: dict
+) -> pd.DataFrame
+```
+
+Batch calculate implied IRRs for a DataFrame of paired sales transactions.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing columns: `key`, `entry_price`, `exit_price`, `entry_date`, `exit_date`
+</ParamField>
+
+<ParamField path="hist_cap_rates" type="dict" required>
+  Dictionary mapping years to entry cap rates: `{year: cap_rate}`
+</ParamField>
+
+<ParamField path="hist_noi_growths" type="dict" required>
+  Dictionary mapping years to NOI growth rates: `{year: noi_growth}`
+</ParamField>
+
+<ResponseField name="df_result" type="pd.DataFrame">
+  Original DataFrame with added columns:
+  - `holding_period`: Holding period in years (int)
+  - `implied_irr`: Calculated IRR for each transaction
+  - `entry_year`: Year of purchase
+  - `entry_cap_rate`: Cap rate used for the entry year
+  - `entry_noi`: Derived NOI at purchase
+</ResponseField>
+
+---
+
+## Capitalization Rate Functions
+
+### calculate_noi
+
+```python
+calculate_noi(price: float, cap_rate: float) -> float
+```
+
+Calculate net operating income from price and cap rate.
+
+<ParamField path="price" type="float" required>
+  Property price
+</ParamField>
+
+<ParamField path="cap_rate" type="float" required>
+  Capitalization rate as a decimal
+</ParamField>
+
+<ResponseField name="noi" type="float">
+  Net operating income: `price × cap_rate`
+</ResponseField>
+
+---
+
+### calculate_cap_rate_growth
+
+```python
+calculate_cap_rate_growth(
+    sale_price_growth: np.ndarray,
+    noi_growth: np.ndarray
+) -> np.ndarray
+```
+
+Calculate annual cap rate changes from sale price and NOI growth rates.
+
+Given `NOI = Sale Price × Cap Rate`, the percentage change in cap rate is approximately:
+```
+ΔCap Rate ≈ (1 + ΔNOI) / (1 + ΔSale Price) - 1
+```
+
+<ParamField path="sale_price_growth" type="np.ndarray" required>
+  Annual percentage changes in sale price as decimals (e.g., `[0.01, 0.015, 0.02]` for 1%, 1.5%, 2%)
+</ParamField>
+
+<ParamField path="noi_growth" type="np.ndarray" required>
+  Annual percentage changes in NOI as decimals
+</ParamField>
+
+<ResponseField name="cap_rate_growth" type="np.ndarray">
+  Annual percentage changes in cap rate as decimals
+</ResponseField>
+
+---
+
+### calculate_noi_growth
+
+```python
+calculate_noi_growth(
+    sale_price_growth: np.ndarray,
+    cap_rate_growth: np.ndarray
+) -> np.ndarray
+```
+
+Calculate annual NOI changes from sale price and cap rate growth.
+
+The compounded growth in NOI is:
+```
+ΔNOI = (1 + ΔSale Price) × (1 + ΔCap Rate) - 1
+```
+
+<ParamField path="sale_price_growth" type="np.ndarray" required>
+  Annual percentage changes in sale price as decimals
+</ParamField>
+
+<ParamField path="cap_rate_growth" type="np.ndarray" required>
+  Annual percentage changes in cap rate as decimals
+</ParamField>
+
+<ResponseField name="noi_growth" type="np.ndarray">
+  Annual percentage changes in NOI as decimals
+</ResponseField>
+
+---
+
+## Usage Example
+
+```python
+from openavmkit.income import derive_prices, derive_irr, derive_irr_df
+import numpy as np
+
+# Example 1: Calculate entry and exit prices
+entry_price, exit_price = derive_prices(
+    target_irr=0.10,        # 10% target return
+    exit_cap_rate=0.06,     # 6% exit cap rate
+    entry_noi=100000,       # $100k initial NOI
+    noi_growth=0.03,        # 3% annual NOI growth
+    holding_period=5        # 5-year hold
+)
+
+print(f"Entry Price: ${entry_price:,.0f}")
+print(f"Exit Price: ${exit_price:,.0f}")
+
+# Example 2: Calculate implied IRR
+implied_irr = derive_irr(
+    entry_price=1500000,
+    exit_price=2000000,
+    entry_cap_rate=0.05,
+    noi_growth=0.03,
+    holding_period=5
+)
+
+print(f"Implied IRR: {implied_irr:.2%}")
+
+# Example 3: Batch process paired sales
+hist_cap_rates = {2018: 0.05, 2019: 0.048, 2020: 0.046}
+hist_noi_growths = {2018: 0.03, 2019: 0.032, 2020: 0.028}
+
+df_result = derive_irr_df(df_sales, hist_cap_rates, hist_noi_growths)
+print(df_result[['key', 'holding_period', 'implied_irr', 'entry_noi']].head())
+```
+
+## Mathematical Background
+
+### DCF Model Assumptions
+
+1. **Cash Flows**: Annual NOI grows at constant rate `g`
+2. **Discount Rate**: All cash flows discounted at IRR
+3. **Exit Value**: Property sold at NOI/cap_rate formula
+4. **Holding Period**: Integer number of years
+
+### Net Present Value Equation
+
+```
+NPV = Σₜ₌₁ᴴ [NOIₜ / (1 + IRR)ᵗ] + [Exit Price / (1 + IRR)ᴴ] - Entry Price = 0
+```
+
+The functions use `scipy.optimize.brentq` for numerical root-finding when solving for IRR or NOI growth.

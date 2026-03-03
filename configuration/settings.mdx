@@ -1,0 +1,412 @@
+---
+title: Settings Configuration
+description: Learn how to configure OpenAVM Kit using the settings.json file to control modeling, analysis, and data processing
+---
+
+## Overview
+
+The `settings.json` file is the central configuration file for OpenAVM Kit. It controls all aspects of your locality's modeling and analysis workflow, from data processing to model training and report generation.
+
+## File Location
+
+The settings file should be placed in your locality's `in/` directory:
+
+```
+notebooks/pipeline/data/<locality_slug>/
+  ├── in/
+  │   ├── settings.json
+  ├── out/
+```
+
+<Note>
+For more information on locality setup, see the [Getting Started](/getting-started) guide.
+</Note>
+
+## Basic Structure
+
+A minimal `settings.json` file can be as simple as:
+
+```json
+{}
+```
+
+This empty configuration will load default values from the built-in template. However, you'll typically want to customize various aspects of the processing pipeline.
+
+## Main Configuration Sections
+
+The settings file is organized into major sections:
+
+<CardGroup cols={2}>
+  <Card title="Locality" icon="map-location-dot">
+    Basic information about your locality, units of measurement, and geographic center
+  </Card>
+  <Card title="Data" icon="database">
+    Data loading, processing, merging, filling, and enrichment settings
+  </Card>
+  <Card title="Modeling" icon="brain">
+    Model configuration, feature selection, and training instructions
+  </Card>
+  <Card title="Analysis" icon="chart-line">
+    Ratio studies, equity analysis, and report generation settings
+  </Card>
+</CardGroup>
+
+### Locality Configuration
+
+Define basic locality information:
+
+<CodeGroup>
+```json Imperial Units
+{
+  "locality": {
+    "slug": "us-tx-travis",
+    "name": "Travis County",
+    "units": "imperial",
+    "center": {
+      "latitude": 30.2672,
+      "longitude": -97.7431
+    }
+  }
+}
+```
+
+```json Metric Units
+{
+  "locality": {
+    "slug": "no-03-oslo",
+    "name": "Oslo",
+    "units": "metric",
+    "center": {
+      "latitude": 59.9139,
+      "longitude": 10.7522
+    }
+  }
+}
+```
+</CodeGroup>
+
+<ParamField path="locality.slug" type="string" required>
+  Unique identifier for your locality in format: `<country>-<state>-<locality>`
+</ParamField>
+
+<ParamField path="locality.name" type="string">
+  Human-readable name for your locality
+</ParamField>
+
+<ParamField path="locality.units" type="string" default="imperial">
+  Unit system: `imperial` (feet, square feet, miles) or `metric` (meters, square meters, kilometers)
+</ParamField>
+
+<ParamField path="locality.center" type="object">
+  Geographic center point of your locality
+  
+  <ParamField path="latitude" type="number" required>
+    Latitude coordinate
+  </ParamField>
+  
+  <ParamField path="longitude" type="number" required>
+    Longitude coordinate
+  </ParamField>
+</ParamField>
+
+### Data Configuration
+
+Control how data is loaded and processed:
+
+```json
+{
+  "data": {
+    "load": {},
+    "process": {
+      "merge": {},
+      "fill": {
+        "zero": [
+          "bldg_area_finished_sqft"
+        ]
+      },
+      "reconcile": {},
+      "enrich": {}
+    }
+  }
+}
+```
+
+<ParamField path="data.process.fill.zero" type="array">
+  List of fields to fill with zero values when missing
+</ParamField>
+
+<ParamField path="data.process.enrich" type="object">
+  Enrichment configuration for Census, OpenStreetMap, and other data sources. See [Census API](/configuration/census-api) and [OpenStreetMap](/configuration/openstreetmap) for details.
+</ParamField>
+
+### Modeling Configuration
+
+Configure model training and feature selection:
+
+```json
+{
+  "modeling": {
+    "metadata": {
+      "modeler": "Your Name",
+      "valuation_date": "2024-01-01"
+    },
+    "instructions": {
+      "feature_selection": {
+        "thresholds": {
+          "correlation": 0.1,
+          "vif": 10,
+          "p_value": 0.05,
+          "t_value": 2
+        },
+        "weights": {
+          "vif": 3,
+          "p_value": 3,
+          "t_value": 2
+        }
+      }
+    },
+    "models": {
+      "default": {
+        "dep_vars": [],
+        "interactions": {
+          "default": true
+        }
+      }
+    }
+  }
+}
+```
+
+<ParamField path="modeling.metadata.modeler" type="string">
+  Name of the person or organization creating the models
+</ParamField>
+
+<ParamField path="modeling.metadata.valuation_date" type="string">
+  Date for property valuation in format `YYYY-MM-DD`
+</ParamField>
+
+<ParamField path="modeling.instructions.feature_selection.thresholds" type="object">
+  Thresholds for automatic feature selection
+  
+  <ParamField path="correlation" type="number" default="0.1">
+    Minimum correlation with target variable
+  </ParamField>
+  
+  <ParamField path="vif" type="number" default="10">
+    Maximum variance inflation factor (multicollinearity threshold)
+  </ParamField>
+  
+  <ParamField path="p_value" type="number" default="0.05">
+    Maximum p-value for statistical significance
+  </ParamField>
+  
+  <ParamField path="t_value" type="number" default="2">
+    Minimum t-statistic value
+  </ParamField>
+</ParamField>
+
+### Analysis Configuration
+
+Configure analysis and reporting:
+
+```json
+{
+  "analysis": {
+    "ratio_study": {
+      "look_back_years": 1,
+      "breakdowns": [
+        {"by": "sale_price", "quantiles": 10}
+      ]
+    },
+    "report": {
+      "formats": ["pdf", "html", "md"]
+    }
+  }
+}
+```
+
+<ParamField path="analysis.ratio_study.look_back_years" type="number" default="1">
+  Number of years to look back for sales comparison
+</ParamField>
+
+<ParamField path="analysis.report.formats" type="array" default='["pdf", "html", "md"]'>
+  Output formats for generated reports. See [PDF Reports](/configuration/pdf-reports) for PDF setup.
+</ParamField>
+
+## Field Classification
+
+Classify your data fields into categories for proper modeling:
+
+```json
+{
+  "field_classification": {
+    "land": {
+      "numeric": [
+        "land_area_sqft",
+        "dist_to_cbd"
+      ],
+      "categorical": [
+        "zoning",
+        "flood_risk"
+      ],
+      "boolean": [
+        "is_corner_lot"
+      ]
+    },
+    "impr": {
+      "numeric": [
+        "bldg_area_finished_sqft",
+        "bldg_age_years"
+      ],
+      "categorical": [
+        "bldg_type",
+        "bldg_quality"
+      ],
+      "boolean": [
+        "has_garage"
+      ]
+    },
+    "other": {
+      "numeric": [],
+      "categorical": [],
+      "boolean": []
+    }
+  }
+}
+```
+
+<ParamField path="field_classification.land" type="object">
+  Fields related to land characteristics
+</ParamField>
+
+<ParamField path="field_classification.impr" type="object">
+  Fields related to building/improvement characteristics
+</ParamField>
+
+<ParamField path="field_classification.other" type="object">
+  Fields not classified as land or improvements
+</ParamField>
+
+## Variable Replacement
+
+Settings supports variable replacement using the `$$` prefix:
+
+```json
+{
+  "custom": {
+    "my_field": "land_area_sqft"
+  },
+  "data": {
+    "process": {
+      "fill": {
+        "zero": ["$$custom.my_field"]
+      }
+    }
+  }
+}
+```
+
+The `$$custom.my_field` reference will be replaced with `land_area_sqft` during settings loading.
+
+## Settings Merging
+
+Your local `settings.json` is merged with the built-in template. Use these prefixes to control merge behavior:
+
+<ParamField path="+key" type="prefix">
+  Add to template array rather than replacing it
+</ParamField>
+
+<ParamField path="!key" type="prefix">
+  Force overwrite template value (stomps template)
+</ParamField>
+
+## Loading Settings in Code
+
+Load settings programmatically:
+
+```python
+from openavmkit.utilities.settings import load_settings
+
+# Load from default location (in/settings.json)
+settings = load_settings()
+
+# Load from custom path
+settings = load_settings("path/to/settings.json")
+
+# Load from dictionary
+settings = load_settings(settings_object={"locality": {"slug": "us-tx-travis"}})
+```
+
+## Helper Functions
+
+OpenAVM Kit provides utility functions for accessing settings:
+
+```python
+from openavmkit.utilities.settings import (
+    get_valuation_date,
+    get_center,
+    area_unit,
+    length_unit,
+    get_fields_land,
+    get_fields_impr
+)
+
+# Get the configured valuation date
+val_date = get_valuation_date(settings)
+
+# Get the locality center coordinates
+longitude, latitude = get_center(settings)
+
+# Get the area unit (sqft or sqm)
+unit = area_unit(settings)  # Returns "sqft" or "sqm"
+
+# Get land fields classified by type
+land_fields = get_fields_land(settings, df)
+# Returns: {"categorical": [...], "numeric": [...], "boolean": [...]}
+```
+
+## Best Practices
+
+<Warning>
+**Never store credentials in settings.json**
+
+The settings file may be uploaded to cloud storage. Always store API keys, passwords, and tokens in the `.env` file instead.
+</Warning>
+
+<Tip>
+**Start with defaults**
+
+Begin with an empty `{}` configuration and add customizations as needed. The built-in template provides sensible defaults.
+</Tip>
+
+<Tip>
+**Use comments for documentation**
+
+Prefix keys with `__` to add comments that will be ignored:
+
+```json
+{
+  "__comment": "This is a comment that will be removed",
+  "locality": {
+    "slug": "us-tx-travis"
+  }
+}
+```
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Cloud Storage" icon="cloud" href="/configuration/cloud-storage">
+    Configure Azure, HuggingFace, or SFTP storage
+  </Card>
+  <Card title="Census API" icon="landmark" href="/configuration/census-api">
+    Set up Census data enrichment
+  </Card>
+  <Card title="OpenStreetMap" icon="map" href="/configuration/openstreetmap">
+    Enable geographic feature enrichment
+  </Card>
+  <Card title="PDF Reports" icon="file-pdf" href="/configuration/pdf-reports">
+    Install wkhtmltopdf for PDF generation
+  </Card>
+</CardGroup>

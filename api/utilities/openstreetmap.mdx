@@ -1,0 +1,313 @@
+---
+title: "openstreetmap"
+description: "OpenStreetMap data retrieval and distance calculations for location features"
+---
+
+The `openstreetmap` module provides utilities for retrieving geographic features from OpenStreetMap and calculating distances to amenities, natural features, and infrastructure for property valuation models.
+
+## Service Class
+
+### OpenStreetMapService
+
+Service for retrieving and processing data from OpenStreetMap.
+
+```python
+from openavmkit.utilities.openstreetmap import OpenStreetMapService
+
+service = OpenStreetMapService(settings={})
+```
+
+<ParamField path="settings" type="dict" default="None">
+  Configuration settings for the service
+</ParamField>
+
+---
+
+## Feature Retrieval
+
+### get_features()
+
+Retrieve features from OpenStreetMap or a custom GeoDataFrame.
+
+```python
+import geopandas as gpd
+
+# Define bounding box (min_lon, min_lat, max_lon, max_lat)
+bbox = (-122.5, 37.7, -122.3, 37.9)
+
+# Settings for water bodies
+water_settings = {
+    'enabled': True,
+    'osm': True,
+    'min_area': 10000,  # square meters
+    'min_length': 0,
+    'top_n': 5
+}
+
+water_bodies = service.get_features(
+    thing='water_bodies',
+    bbox=bbox,
+    settings=water_settings,
+    use_cache=True,
+    gdf=None
+)
+```
+
+<ParamField path="thing" type="str" required>
+  Type of feature to retrieve. Built-in types include:
+  - `'water_bodies'`: Lakes, rivers, bays, reservoirs
+  - `'rivers'`: Rivers and streams
+  - `'lake'`: Lakes only
+  - `'water'`: General water features
+  - `'transportation'`: Railways, subways, light rail
+  - `'airport'`: Airports and aerodromes
+  - `'educational'`: Universities and colleges
+  - `'parks'`: Parks, gardens, playgrounds
+  - `'golf_courses'`: Golf courses
+  - `'coastline'`: Coastlines
+  
+  Custom features can be defined using `osm_tags` in settings.
+</ParamField>
+
+<ParamField path="bbox" type="Tuple[float, float, float, float]" required>
+  Bounding box as (min_lon, min_lat, max_lon, max_lat)
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration dictionary with keys:
+  - `enabled` (bool): Whether to retrieve this feature
+  - `osm` (bool): Whether to get from OSM or use custom GeoDataFrame
+  - `min_area` (float): Minimum area in square meters for polygons
+  - `min_length` (float): Minimum length in meters for lines
+  - `top_n` (int): Number of largest features to highlight
+  - `osm_tags` (dict, optional): Custom OSM tags for non-built-in features
+</ParamField>
+
+<ParamField path="use_cache" type="bool" default="True">
+  Whether to use cached data if available
+</ParamField>
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" default="None">
+  Custom GeoDataFrame to use instead of querying OSM. Must have a `name` column.
+</ParamField>
+
+<ResponseField name="features" type="gpd.GeoDataFrame">
+  GeoDataFrame containing filtered features with:
+  - `geometry`: Feature geometries
+  - `name`: Feature names (cleaned and normalized)
+  - `area`: Area in square meters (for polygons)
+  - `length`: Length in meters (for lines)
+  
+  Stored internally as both `{thing}` (all features) and `{thing}_top` (top N largest).
+</ResponseField>
+
+---
+
+### calculate_distances()
+
+Calculate distances from parcels to features, both aggregate and specific top N features.
+
+```python
+from openavmkit.utilities.openstreetmap import OpenStreetMapService
+
+service = OpenStreetMapService()
+
+# First get features
+bbox = parcels_gdf.total_bounds
+water_features = service.get_features(
+    thing='water_bodies',
+    bbox=bbox,
+    settings={'enabled': True, 'osm': True, 'min_area': 10000, 'top_n': 5}
+)
+
+# Calculate distances
+distances_df = service.calculate_distances(
+    gdf=parcels_gdf,
+    features=water_features,
+    feature_type='water_bodies'
+)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  Parcel GeoDataFrame
+</ParamField>
+
+<ParamField path="features" type="gpd.GeoDataFrame" required>
+  Features GeoDataFrame from `get_features()`
+</ParamField>
+
+<ParamField path="feature_type" type="str" required>
+  Type of feature (e.g., `'water'`, `'park'`, `'transportation'`)
+</ParamField>
+
+<ResponseField name="distances" type="pd.DataFrame">
+  DataFrame with distance columns (in meters):
+  - `dist_to_{feature_type}_any`: Distance to nearest feature of this type
+  - `dist_to_{feature_type}_{name}`: Distance to each of the top N named features
+  
+  All distances are calculated in a UTM projection for accuracy.
+</ResponseField>
+
+---
+
+### enrich_parcels()
+
+Get OpenStreetMap features and prepare them for spatial joins. Returns a dictionary of feature dataframes.
+
+```python
+settings = {
+    'water_bodies': {'enabled': True, 'osm': True, 'min_area': 10000, 'top_n': 5},
+    'parks': {'enabled': True, 'osm': True, 'min_area': 5000, 'top_n': 3},
+    'educational': {'enabled': True, 'osm': True, 'min_area': 1000, 'top_n': 5}
+}
+
+feature_dfs = service.enrich_parcels(gdf=parcels_gdf, settings=settings)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  Parcel GeoDataFrame (used to determine bounding box)
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary with feature configurations
+</ParamField>
+
+<ResponseField name="dataframes" type="Dict[str, gpd.GeoDataFrame]">
+  Dictionary of feature GeoDataFrames with keys like:
+  - `'water_bodies'`: All water body features
+  - `'water_bodies_top'`: Top N largest water bodies
+  - `'parks'`: All park features
+  - `'parks_top'`: Top N largest parks
+  - Similar patterns for other enabled feature types
+</ResponseField>
+
+---
+
+## Elevation Data (Placeholder)
+
+### get_elevation_data()
+
+Get digital elevation model (DEM) data. Currently returns dummy data as a placeholder.
+
+```python
+elevation, (lon_range, lat_range) = service.get_elevation_data(
+    bbox=(-122.5, 37.7, -122.3, 37.9),
+    resolution=30
+)
+```
+
+<ParamField path="bbox" type="Tuple[float, float, float, float]" required>
+  Bounding box (min_lon, min_lat, max_lon, max_lat)
+</ParamField>
+
+<ParamField path="resolution" type="int" default="30">
+  Resolution in meters
+</ParamField>
+
+<ResponseField name="return" type="Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]">
+  Tuple containing:
+  - `elevation`: 2D array of elevation data
+  - `(lon_range, lat_range)`: Coordinate ranges for the grid
+</ResponseField>
+
+---
+
+### calculate_elevation_stats()
+
+Calculate elevation statistics for each parcel. Currently uses dummy elevation data.
+
+```python
+elevation_data, lon_lat_ranges = service.get_elevation_data(bbox)
+stats_df = service.calculate_elevation_stats(
+    gdf=parcels_gdf,
+    elevation_data=elevation_data,
+    lon_lat_ranges=lon_lat_ranges
+)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  Parcel GeoDataFrame
+</ParamField>
+
+<ParamField path="elevation_data" type="np.ndarray" required>
+  Elevation data as a 2D array
+</ParamField>
+
+<ParamField path="lon_lat_ranges" type="Tuple[np.ndarray, np.ndarray]" required>
+  Longitude and latitude ranges from `get_elevation_data()`
+</ParamField>
+
+<ResponseField name="stats" type="pd.DataFrame">
+  DataFrame containing:
+  - `avg_elevation`: Average elevation for each parcel
+  - `avg_slope`: Average slope for each parcel
+</ResponseField>
+
+---
+
+## Initialization
+
+### init_service_openstreetmap()
+
+Initialize an OpenStreetMap service with the provided settings.
+
+```python
+from openavmkit.utilities.openstreetmap import init_service_openstreetmap
+
+settings = {
+    'water_bodies': {'enabled': True, 'osm': True, 'min_area': 10000, 'top_n': 5}
+}
+
+service = init_service_openstreetmap(settings)
+```
+
+<ParamField path="settings" type="dict" default="None">
+  Configuration settings for the service
+</ParamField>
+
+<ResponseField name="service" type="OpenStreetMapService">
+  Initialized OpenStreetMap service
+</ResponseField>
+
+---
+
+## Usage Example
+
+```python
+import geopandas as gpd
+from openavmkit.utilities.openstreetmap import init_service_openstreetmap
+
+# Initialize service
+service = init_service_openstreetmap()
+
+# Load parcels
+parcels_gdf = gpd.read_file('parcels.geojson')
+bbox = parcels_gdf.total_bounds
+
+# Configure features to retrieve
+water_settings = {
+    'enabled': True,
+    'osm': True,
+    'min_area': 10000,
+    'top_n': 5
+}
+
+# Get water features
+water_features = service.get_features(
+    thing='water_bodies',
+    bbox=bbox,
+    settings=water_settings
+)
+
+# Calculate distances
+distances = service.calculate_distances(
+    gdf=parcels_gdf,
+    features=water_features,
+    feature_type='water_bodies'
+)
+
+# Merge distances back to parcels
+parcels_enriched = parcels_gdf.merge(distances, left_index=True, right_index=True)
+
+print(f"Added distance columns: {list(distances.columns)}")
+```

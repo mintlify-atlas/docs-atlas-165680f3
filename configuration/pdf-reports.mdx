@@ -1,0 +1,482 @@
+---
+title: PDF Report Configuration
+description: Install and configure wkhtmltopdf to generate PDF reports from your OpenAVM Kit analyses
+---
+
+## Overview
+
+OpenAVM Kit can generate comprehensive PDF reports for your valuation analyses, ratio studies, and equity assessments. This feature uses `wkhtmltopdf`, a command-line tool that converts HTML to PDF with high-quality rendering.
+
+<Note>
+PDF generation is **optional**. If you don't install `wkhtmltopdf`, you can still generate HTML and Markdown reports. The rest of OpenAVM Kit will work normally.
+</Note>
+
+## Why PDF Reports?
+
+PDF reports offer several advantages:
+
+- **Professional presentation** - Share polished reports with stakeholders
+- **Archival format** - Long-term storage with consistent rendering
+- **Print-ready** - Generate reports suitable for printing
+- **Self-contained** - All content embedded in a single file
+- **Universal compatibility** - Opens on any device without special software
+
+## Prerequisites
+
+OpenAVM Kit uses two components for PDF generation:
+
+1. **pdfkit** - Python wrapper (installed automatically with OpenAVM Kit)
+2. **wkhtmltopdf** - System command-line tool (requires manual installation)
+
+<Warning>
+You **must** install `wkhtmltopdf` manually on your system. It is not installed by pip and cannot be included in Python packages.
+</Warning>
+
+## Installation
+
+### Windows
+
+<Steps>
+  <Step title="Download Installer">
+    Visit the [wkhtmltopdf downloads page](https://wkhtmltopdf.org/downloads.html) and download the Windows installer (`.exe` file).
+    
+    Choose the appropriate version:
+    - **64-bit** for most modern systems
+    - **32-bit** for older systems
+  </Step>
+  
+  <Step title="Run Installer">
+    Run the downloaded installer and follow the installation wizard.
+    
+    **Important:** Pay attention to the installation directory. Common locations:
+    - `C:\Program Files\wkhtmltopdf\`
+    - `C:\Program Files (x86)\wkhtmltopdf\`
+  </Step>
+  
+  <Step title="Add to PATH">
+    Add the `wkhtmltopdf\bin` directory to your system PATH:
+    
+    1. Open **System Properties** (Right-click "This PC" → Properties)
+    2. Click **Advanced system settings**
+    3. Click **Environment Variables**
+    4. Under "System variables", find and select **Path**
+    5. Click **Edit**
+    6. Click **New**
+    7. Add the path to the `bin` folder (e.g., `C:\Program Files\wkhtmltopdf\bin`)
+    8. Click **OK** on all dialogs
+    
+    <Tip>
+    For detailed instructions with screenshots, see this [PATH tutorial](https://web.archive.org/web/20250131024033/https://www.architectryan.com/2018/03/17/add-to-the-path-on-windows-10/).
+    </Tip>
+  </Step>
+  
+  <Step title="Verify Installation">
+    Open a **new** Command Prompt and run:
+    
+    ```bash
+    wkhtmltopdf --version
+    ```
+    
+    You should see version information like:
+    ```
+    wkhtmltopdf 0.12.6
+    ```
+    
+    <Warning>
+    You must open a **new** Command Prompt after modifying PATH. Existing terminals won't see the updated PATH.
+    </Warning>
+  </Step>
+</Steps>
+
+### macOS
+
+<Steps>
+  <Step title="Install Homebrew (if needed)">
+    If you don't have Homebrew installed, get it from [brew.sh](https://brew.sh) or run:
+    
+    ```bash
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    ```
+  </Step>
+  
+  <Step title="Install wkhtmltopdf">
+    Use Homebrew to install wkhtmltopdf:
+    
+    ```bash
+    brew install wkhtmltopdf
+    ```
+    
+    This will download, compile, and install wkhtmltopdf along with all dependencies.
+  </Step>
+  
+  <Step title="Verify Installation">
+    Check that wkhtmltopdf is installed:
+    
+    ```bash
+    wkhtmltopdf --version
+    ```
+    
+    You should see version information:
+    ```
+    wkhtmltopdf 0.12.6
+    ```
+  </Step>
+</Steps>
+
+### Linux (Debian/Ubuntu)
+
+<Steps>
+  <Step title="Update Package List">
+    Update your package manager:
+    
+    ```bash
+    sudo apt-get update
+    ```
+  </Step>
+  
+  <Step title="Install wkhtmltopdf">
+    Install wkhtmltopdf and dependencies:
+    
+    ```bash
+    sudo apt-get install wkhtmltopdf
+    ```
+    
+    This will install wkhtmltopdf along with required system libraries like X11 for rendering.
+  </Step>
+  
+  <Step title="Verify Installation">
+    Check the installation:
+    
+    ```bash
+    wkhtmltopdf --version
+    ```
+    
+    Expected output:
+    ```
+    wkhtmltopdf 0.12.6
+    ```
+  </Step>
+</Steps>
+
+### Linux (Other Distributions)
+
+<AccordionGroup>
+  <Accordion title="Red Hat/CentOS/Fedora">
+    ```bash
+    sudo yum install wkhtmltopdf
+    # or for newer systems
+    sudo dnf install wkhtmltopdf
+    ```
+  </Accordion>
+  
+  <Accordion title="Arch Linux">
+    ```bash
+    sudo pacman -S wkhtmltopdf
+    ```
+  </Accordion>
+  
+  <Accordion title="From Source">
+    If your distribution doesn't have wkhtmltopdf in repositories:
+    
+    1. Visit [wkhtmltopdf downloads](https://wkhtmltopdf.org/downloads.html)
+    2. Download the appropriate package for your distribution
+    3. Install using your package manager
+    
+    Example for a `.deb` package:
+    ```bash
+    sudo dpkg -i wkhtmltox_*.deb
+    sudo apt-get install -f  # Install dependencies
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+### Enable PDF Reports
+
+Configure report formats in your `settings.json`:
+
+```json
+{
+  "analysis": {
+    "report": {
+      "formats": ["pdf", "html", "md"]
+    }
+  }
+}
+```
+
+<ParamField path="analysis.report.formats" type="array" default='["pdf", "html", "md"]'>
+  List of output formats for generated reports
+  
+  **Options:**
+  - `"pdf"` - PDF format (requires wkhtmltopdf)
+  - `"html"` - HTML format (always available)
+  - `"md"` - Markdown format (always available)
+</ParamField>
+
+### Generate Reports in Code
+
+```python
+from openavmkit.reports import generate_report
+
+# Generate a ratio study report
+generate_report(
+    locality="us-tx-travis",
+    report_type="ratio_study",
+    output_formats=["pdf", "html"]
+)
+
+# Generate an equity analysis report
+generate_report(
+    locality="us-tx-travis",
+    report_type="horizontal_equity",
+    output_formats=["pdf"]
+)
+```
+
+## Report Types
+
+OpenAVM Kit can generate several types of reports:
+
+<CardGroup cols={2}>
+  <Card title="Ratio Study" icon="chart-line">
+    Assessment ratio analysis with COD, PRD, and other statistics
+  </Card>
+  <Card title="Horizontal Equity" icon="balance-scale">
+    Analysis of assessment uniformity across property types
+  </Card>
+  <Card title="Sales Scrutiny" icon="magnifying-glass-chart">
+    Detailed examination of sales data and outliers
+  </Card>
+  <Card title="Model Performance" icon="brain">
+    Model accuracy metrics and feature importance
+  </Card>
+</CardGroup>
+
+All report types can be generated in PDF, HTML, and Markdown formats.
+
+## Troubleshooting
+
+### Command Not Found
+
+**Error:** `OSError: wkhtmltopdf command not found`
+
+**Solutions:**
+
+<AccordionGroup>
+  <Accordion title="Windows">
+    1. Verify wkhtmltopdf is installed in Program Files
+    2. Check that the `bin` directory is in your PATH
+    3. Open a **new** Command Prompt (PATH changes don't affect existing terminals)
+    4. Run `wkhtmltopdf --version` to confirm
+  </Accordion>
+  
+  <Accordion title="macOS/Linux">
+    1. Check if wkhtmltopdf is installed: `which wkhtmltopdf`
+    2. If not found, install using your package manager
+    3. Verify installation: `wkhtmltopdf --version`
+    4. If installed but not found, check your PATH: `echo $PATH`
+  </Accordion>
+</AccordionGroup>
+
+### PDF Generation Failed
+
+**Error:** `Failed to generate PDF report. Is wkhtmltopdf installed?`
+
+**Solutions:**
+
+1. **Verify wkhtmltopdf works directly:**
+   ```bash
+   wkhtmltopdf --version
+   ```
+
+2. **Test basic PDF generation:**
+   ```bash
+   echo "<h1>Test</h1>" > test.html
+   wkhtmltopdf test.html test.pdf
+   ```
+
+3. **Check Python can find it:**
+   ```python
+   import subprocess
+   subprocess.run(["wkhtmltopdf", "--version"])
+   ```
+
+4. **Look for detailed error messages** in the Python traceback
+
+### Display/X11 Errors (Linux)
+
+**Error:** `QXcbConnection: Could not connect to display`
+
+**Solution:** wkhtmltopdf requires X11 even for headless operation. Install xvfb:
+
+```bash
+sudo apt-get install xvfb
+
+# Run with virtual display
+xvfb-run wkhtmltopdf input.html output.pdf
+```
+
+Or use wkhtmltopdf with the `--use-xserver` flag in your configuration.
+
+### Permission Errors
+
+**Error:** `Permission denied` when generating PDFs
+
+**Solutions:**
+
+1. Check output directory permissions
+2. Ensure your user has write access to the output folder
+3. On Linux/macOS, verify file ownership:
+   ```bash
+   ls -la out/
+   ```
+
+## Advanced Configuration
+
+### Custom PDF Options
+
+You can customize PDF generation by configuring wkhtmltopdf options:
+
+```python
+from openavmkit.reports import generate_pdf
+
+# Generate PDF with custom options
+generate_pdf(
+    html_content="<h1>Report</h1>",
+    output_path="out/report.pdf",
+    options={
+        "page-size": "Letter",
+        "margin-top": "0.75in",
+        "margin-right": "0.75in",
+        "margin-bottom": "0.75in",
+        "margin-left": "0.75in",
+        "encoding": "UTF-8",
+        "no-outline": None,
+        "enable-local-file-access": None
+    }
+)
+```
+
+### Common Options
+
+<ParamField path="page-size" type="string" default="Letter">
+  Page size: `Letter`, `A4`, `Legal`, etc.
+</ParamField>
+
+<ParamField path="margin-top" type="string" default="0.75in">
+  Top margin (units: in, cm, mm)
+</ParamField>
+
+<ParamField path="margin-right" type="string" default="0.75in">
+  Right margin
+</ParamField>
+
+<ParamField path="margin-bottom" type="string" default="0.75in">
+  Bottom margin
+</ParamField>
+
+<ParamField path="margin-left" type="string" default="0.75in">
+  Left margin
+</ParamField>
+
+<ParamField path="orientation" type="string" default="Portrait">
+  Page orientation: `Portrait` or `Landscape`
+</ParamField>
+
+<ParamField path="enable-local-file-access" type="flag">
+  Allow access to local files (needed for images, CSS)
+</ParamField>
+
+For the full list of options, see the [wkhtmltopdf documentation](https://wkhtmltopdf.org/usage/wkhtmltopdf.txt).
+
+## Best Practices
+
+<Tip>
+**Generate Multiple Formats**
+
+Always generate HTML along with PDF. HTML is useful for debugging layout issues and provides an interactive alternative to static PDFs.
+
+```json
+{
+  "analysis": {
+    "report": {
+      "formats": ["pdf", "html"]
+    }
+  }
+}
+```
+</Tip>
+
+<Tip>
+**Test with Simple Content First**
+
+Before generating complex reports, verify wkhtmltopdf works with a simple HTML file:
+
+```bash
+echo "<h1>Test Report</h1><p>This is a test.</p>" > test.html
+wkhtmltopdf test.html test.pdf
+```
+</Tip>
+
+<Tip>
+**Keep wkhtmltopdf Updated**
+
+Check for updates periodically to get bug fixes and rendering improvements:
+
+```bash
+# macOS
+brew upgrade wkhtmltopdf
+
+# Ubuntu/Debian
+sudo apt-get update && sudo apt-get upgrade wkhtmltopdf
+```
+</Tip>
+
+## Fallback Options
+
+If you cannot install wkhtmltopdf, you have alternatives:
+
+### Use HTML Reports
+
+HTML reports can be:
+- Viewed in any web browser
+- Printed to PDF using the browser's print function
+- Shared via web hosting
+- Converted to PDF using online tools
+
+### Use Markdown Reports
+
+Markdown reports can be:
+- Converted to PDF using pandoc, grip, or other tools
+- Viewed with any text editor or Markdown viewer
+- Version controlled easily
+- Converted to other formats (Word, HTML, etc.)
+
+### Convert HTML to PDF Manually
+
+Open the HTML report in a browser and use Print → Save as PDF:
+
+1. Open `out/report.html` in Chrome, Firefox, or Safari
+2. Press Ctrl+P (Cmd+P on Mac)
+3. Select "Save as PDF" as the destination
+4. Adjust margins and options
+5. Click Save
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Settings Configuration" icon="gear" href="/configuration/settings">
+    Configure report formats and options
+  </Card>
+  <Card title="Analysis Guide" icon="chart-line" href="/advanced/assessment-quality">
+    Learn about ratio studies and equity analysis
+  </Card>
+  <Card title="Cloud Storage" icon="cloud" href="/configuration/cloud-storage">
+    Share reports via cloud storage
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/installation">
+    Return to the getting started guide
+  </Card>
+</CardGroup>

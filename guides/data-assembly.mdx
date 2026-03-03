@@ -1,0 +1,270 @@
+---
+title: Data Assembly
+description: Loading and processing data sources into a unified SalesUniversePair structure
+---
+
+The data assembly phase loads your raw data files and combines them into a unified structure called a `SalesUniversePair` (or `sup`). This structure contains two key dataframes: **Universe** (all parcels) and **Sales** (transactions).
+
+## Understanding SalesUniversePair
+
+A `SalesUniversePair` is the fundamental data structure in OpenAVM Kit:
+
+- **Universe DataFrame**: All parcels in your jurisdiction with their current characteristics
+- **Sales DataFrame**: Transaction records with prices, dates, and historical characteristics
+
+```python
+# Accessing the dataframes
+sup = SalesUniversePair(...)
+df_universe = sup["universe"]
+df_sales = sup["sales"]
+```
+
+## Loading Data
+
+Use `load_dataframes()` to read all configured data sources from your settings.
+
+```python
+from openavmkit.pipeline import load_dataframes, load_settings
+
+settings = load_settings()
+dataframes = load_dataframes(settings, verbose=True)
+```
+
+### Supported File Formats
+
+<Tabs>
+  <Tab title="Geospatial">
+    - **GeoPackage** (`.gpkg`) - Recommended
+    - **Shapefile** (`.shp`)
+    - **GeoJSON** (`.geojson`)
+    - **Parquet with geometry** (`.parquet`)
+  </Tab>
+  <Tab title="Tabular">
+    - **CSV** (`.csv`)
+    - **Parquet** (`.parquet`)
+    - **Excel** (`.xlsx`)
+  </Tab>
+</Tabs>
+
+### Configuration Example
+
+Define your data sources in `settings.json`:
+
+```json settings.json
+{
+  "data": {
+    "load": {
+      "geo_parcels": {
+        "path": "parcels.gpkg",
+        "type": "geopackage",
+        "layer": "parcels"
+      },
+      "property_characteristics": {
+        "path": "property_data.csv",
+        "type": "csv"
+      },
+      "sales_records": {
+        "path": "sales.csv",
+        "type": "csv"
+      }
+    }
+  }
+}
+```
+
+<Note>
+The `geo_parcels` layer is **required** and must contain a `geometry` column with parcel boundaries.
+</Note>
+
+## Processing Data
+
+Once loaded, use `process_dataframes()` to merge and enrich the data:
+
+```python pipeline.py:764-790
+from openavmkit.pipeline import process_dataframes
+
+sales_univ_pair = process_dataframes(
+    dataframes=dataframes,
+    settings=settings,
+    verbose=True
+)
+```
+
+This function:
+
+1. **Merges dataframes** using key fields
+2. **Enriches geometries** with calculated metrics (area, aspect ratio, etc.)
+3. **Processes sales records** and links them to parcels
+4. **Validates data** and ensures consistency
+
+### What `process_data()` Does
+
+The `process_data()` function (called internally by `process_dataframes()`) performs:
+
+```python data.py
+def process_data(dataframes: dict[str, pd.DataFrame], settings: dict, verbose: bool = False):
+    """Process and merge dataframes according to settings.
+    
+    - Combines multiple data sources
+    - Enriches with time fields
+    - Calculates geometric properties
+    - Splits into sales and universe
+    """
+```
+
+**Key operations:**
+- Merge all dataframes on common keys (typically `key` or `parcel_id`)
+- Calculate land area from GIS geometries
+- Enrich time-based fields for sales dates
+- Separate sales transactions from universe parcels
+
+## Examining Your Data
+
+After assembly, inspect the results to verify everything loaded correctly:
+
+```python
+from openavmkit.pipeline import examine_sup
+
+examine_sup(sales_univ_pair, settings)
+```
+
+**Output shows:**
+- Field names and types
+- Non-zero and non-null counts
+- Unique value counts for categorical fields
+- Distribution statistics
+
+### Detailed Examination
+
+For deeper inspection, use the detailed examination function:
+
+```python
+from openavmkit.pipeline import examine_sup_in_ridiculous_detail
+
+examine_sup_in_ridiculous_detail(sales_univ_pair, settings)
+```
+
+This displays:
+- `describe()` statistics for all numeric fields
+- `value_counts()` for all categorical fields
+- Data quality metrics
+
+## Example Workflow
+
+Here's a complete example from the `01-assemble.ipynb` notebook:
+
+<Steps>
+
+### Load settings and initialize
+
+```python 01-assemble.ipynb:157-158
+settings = load_settings()
+```
+
+### Load all dataframes
+
+```python 01-assemble.ipynb:176-181
+dataframes = from_checkpoint("1-assemble-01-load_dataframes", load_dataframes,
+    {
+        "settings": load_settings(),
+        "verbose": verbose
+    }
+)
+```
+
+### Process into SalesUniversePair
+
+```python 01-assemble.ipynb:193-200
+sales_univ_pair = from_checkpoint("1-assemble-02-process_data", process_dataframes,
+    {
+        "dataframes": dataframes,
+        "settings": load_settings(), 
+        "verbose": verbose
+    }
+)
+```
+
+### Enrich with street data (optional)
+
+```python 01-assemble.ipynb:210-217
+sales_univ_pair = from_checkpoint("1-assemble-03-enrich_streets", enrich_sup_streets,
+    {
+        "sup": sales_univ_pair,
+        "settings":load_settings(), 
+        "verbose":verbose
+    }
+)
+```
+
+### Tag model groups
+
+```python 01-assemble.ipynb:300-306
+sales_univ_pair = from_checkpoint("1-assemble-04-tag_modeling_groups", tag_model_groups_sup,
+    {
+        "sup": sales_univ_pair, 
+        "settings": load_settings(), 
+        "verbose": verbose
+    }
+)
+```
+
+### Write outputs
+
+```python 01-assemble.ipynb:324-330
+write_notebook_output_sup(
+    sales_univ_pair, 
+    "1-assemble", 
+    parquet=True, 
+    gpkg=False, 
+    shp=False
+)
+```
+
+</Steps>
+
+## Output Files
+
+The assembly process writes several output files to `out/look/`:
+
+- `1-assemble-universe.parquet` - All parcels with current characteristics
+- `1-assemble-sales.parquet` - Sales metadata only
+- `1-assemble-sales-hydrated.parquet` - Sales with full parcel characteristics
+- `1-assemble-sup.pickle` - Complete SalesUniversePair object
+
+<Tip>
+Load these files in QGIS, ArcGIS, or Felt to visualize your data on a map and verify spatial accuracy.
+</Tip>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Missing 'geo_parcels' error">
+    The `geo_parcels` layer is required and must be defined in your settings:
+    
+    ```json
+    "geo_parcels": {
+      "path": "parcels.gpkg",
+      "type": "geopackage"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="No geometry column found">
+    Ensure your `geo_parcels` file contains a `geometry` column with valid polygon or multipolygon geometries.
+  </Accordion>
+  
+  <Accordion title="Merge key mismatches">
+    Verify that all dataframes share a common key field (typically `key` or `parcel_id`). Configure merge keys in your settings if using custom field names.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Cleaning" icon="broom" href="/guides/data-cleaning">
+    Clean and validate your assembled data
+  </Card>
+  <Card title="Modeling" icon="brain" href="/guides/modeling">
+    Build predictive models with your data
+  </Card>
+</CardGroup>

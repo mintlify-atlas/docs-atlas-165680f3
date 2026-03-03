@@ -1,0 +1,365 @@
+---
+title: Sales Scrutiny
+description: Anomaly detection and validation tools for identifying potentially invalid sales
+---
+
+The sales scrutiny module provides cluster-based analysis to identify anomalous sales that may be invalid. It helps assessors focus their review efforts on sales most likely to have issues.
+
+## Classes
+
+### SalesScrutinyStudy
+
+Sales scrutiny study object that performs cluster-based analysis on sales to identify anomalies.
+
+**Attributes:**
+- `df_vacant` (pd.DataFrame): DataFrame of sales that were allegedly vacant (no building) at time of sale
+- `df_improved` (pd.DataFrame): DataFrame of sales that were allegedly improved (had building) at time of sale
+- `settings` (dict): Settings dictionary
+- `model_group` (str): The model group to investigate
+- `summaries` (dict[str, SalesScrutinyStudySummary]): Dictionary in which the results are stored
+- `unit` (str): The area unit ("sqft" or "sqm")
+
+#### `__init__`
+
+```python
+SalesScrutinyStudy(
+    df: pd.DataFrame,
+    settings: dict,
+    model_group: str
+)
+```
+
+<ParamField path="df" type="pd.DataFrame">
+  The data you wish to analyze
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="model_group" type="str">
+  Model group to analyze
+</ParamField>
+
+#### `write()`
+
+Writes the sales scrutiny report to disk.
+
+```python
+write(path: str)
+```
+
+<ParamField path="path" type="str">
+  The root path for output files
+</ParamField>
+
+#### `get_scrutinized()`
+
+Remove flagged sales from the dataset and return the modified dataset.
+
+```python
+get_scrutinized(
+    df_in: pd.DataFrame,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+<ParamField path="df_in" type="pd.DataFrame">
+  The DataFrame you wish to clean
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame with flagged sales marked as invalid
+</ResponseField>
+
+---
+
+### SalesScrutinyStudySummary
+
+Summary statistics for a sales scrutiny study.
+
+**Attributes:**
+- `num_sales_flagged` (int): The number of sales flagged by the study
+- `num_sales_total` (int): The number of sales that were tested
+- `num_flagged_sales_by_type` (dict[str, int]): Dictionary breaking down number of flagged sales by anomaly type
+
+---
+
+## Functions
+
+### run_heuristics
+
+Identifies and flags anomalous sales by heuristic. Drops them if the user specifies.
+
+```python
+run_heuristics(
+    sup: SalesUniversePair,
+    settings: dict,
+    drop: bool = True,
+    verbose: bool = False
+) -> SalesUniversePair
+```
+
+<ParamField path="sup" type="SalesUniversePair">
+  The data you want to analyze/clean
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="drop" type="bool" default="True">
+  If True, drops all sales flagged by this method
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="return" type="SalesUniversePair">
+  The original data with any modifications
+</ResponseField>
+
+**Heuristics Applied:**
+
+1. **Duplicate Deed IDs and Dates**: Flags sales with identical deed IDs and sale dates (potential multi-parcel sales)
+2. **Duplicate Dates and Prices**: Flags sales made on the same date for the same price (potential multi-parcel sales)
+3. **Misclassified Vacant Sales**: Flags vacant sales where the building year built is older than the sale year
+
+---
+
+### drop_manual_exclusions
+
+Drops sales that the user has individually marked as invalid.
+
+```python
+drop_manual_exclusions(
+    sup: SalesUniversePair,
+    settings: dict,
+    verbose: bool = False
+) -> SalesUniversePair
+```
+
+<ParamField path="sup" type="SalesUniversePair">
+  The data you want to clean
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ResponseField name="return" type="SalesUniversePair">
+  The original data with any modifications
+</ResponseField>
+
+Reads a CSV file specified in `settings.analysis.sales_scrutiny.invalid_key_file` containing sale keys to exclude.
+
+---
+
+### run_sales_scrutiny
+
+Run sales scrutiny analysis on an individual model group.
+
+```python
+run_sales_scrutiny(
+    df_in: pd.DataFrame,
+    settings: dict,
+    model_group: str,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+<ParamField path="df_in" type="pd.DataFrame">
+  The data that you want to analyze
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Configuration settings
+</ParamField>
+
+<ParamField path="model_group" type="str">
+  The model group you want to analyze
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, enables verbose logging
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  Updated DataFrame after sales scrutiny analysis with flagged sales marked as invalid
+</ResponseField>
+
+---
+
+### run_sales_scrutiny_per_model_group
+
+Run sales scrutiny analysis for each model group within a DataFrame.
+
+```python
+run_sales_scrutiny_per_model_group(
+    df_in: pd.DataFrame,
+    settings: dict,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+<ParamField path="df_in" type="pd.DataFrame">
+  The data that you want to analyze
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Configuration settings
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, enables verbose logging
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  Updated DataFrame after sales scrutiny analysis
+</ResponseField>
+
+---
+
+### mark_ss_ids_per_model_group
+
+Cluster parcels for a sales scrutiny study by assigning sales scrutiny IDs.
+
+This function processes each model group within the provided dataset, identifies clusters of parcels for scrutiny, and writes the cluster identifiers into a new field.
+
+```python
+mark_ss_ids_per_model_group(
+    df_in: pd.DataFrame,
+    settings: dict,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+<ParamField path="df_in" type="pd.DataFrame">
+  The data you want to mark
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Configuration settings
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints verbose output during processing
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  Updated DataFrame with marked sales scrutiny IDs (ss_id column)
+</ResponseField>
+
+---
+
+## Anomaly Types
+
+The sales scrutiny study identifies five types of anomalies:
+
+### Anomaly 1: Weird Price/Area and Weird Area
+
+**Criteria:**
+- Price per area is extremely high or low (> 2 standard deviations)
+- Area itself is extremely high or low (> 2 standard deviations)
+
+**Interpretation:**
+Likely indicates data entry errors in either sale price or area measurements, or a genuinely unusual property.
+
+---
+
+### Anomaly 2: Low Price and Low Price/Area
+
+**Criteria:**
+- Sale price is low (< median for cluster)
+- Price per area is low (< 2 standard deviations below median)
+- Area is in normal range (within 1 standard deviation)
+
+**Interpretation:**
+May indicate:
+- Non-arms-length transaction
+- Distressed sale
+- Missing property characteristics
+- Property condition issues not captured in data
+
+---
+
+### Anomaly 3: High Price and High Price/Area
+
+**Criteria:**
+- Sale price is high (> median for cluster)
+- Price per area is high (> 2 standard deviations above median)
+- Area is in normal range (within 1 standard deviation)
+
+**Interpretation:**
+May indicate:
+- Luxury property with superior characteristics not captured
+- Data entry error (inflated sale price)
+- Unique property features
+
+---
+
+### Anomaly 4: Normal Price and High Price/Area
+
+**Criteria:**
+- Sale price is in normal range (within 1 standard deviation of median)
+- Price per area is high (> 2 standard deviations above median)
+- Area is in normal range (within 1 standard deviation)
+
+**Interpretation:**
+May indicate:
+- Incorrectly classified property (e.g., vacant sale with building present)
+- Missing area data
+- Premium location within cluster
+
+---
+
+### Anomaly 5: Normal Price and Low Price/Area
+
+**Criteria:**
+- Sale price is in normal range (within 1 standard deviation of median)
+- Price per area is low (< 2 standard deviations below median)
+- Area is in normal range (within 1 standard deviation)
+
+**Interpretation:**
+May indicate:
+- Large property in a typically smaller-property area
+- Inflated area measurement
+- Property with significant unusable area
+
+---
+
+## Clustering Methodology
+
+Sales are grouped into clusters based on:
+- **Location**: Neighborhood or other geographic identifier
+- **Categorical fields**: Property characteristics (from settings)
+- **Numeric fields**: Continuous property characteristics (from settings)
+- **Vacant status**: Analyzed separately for vacant vs. improved
+
+Within each cluster, the Coefficient of Horizontal Dispersion (CHD) is calculated to measure price uniformity. Sales that deviate significantly from their cluster are flagged.
+
+---
+
+## Bimodal Cluster Detection
+
+The study also identifies clusters with bimodal distributions using Gaussian Mixture Models.
+
+**Criteria for Bimodal Classification:**
+- BIC(1) - BIC(2) ≥ 10 (two components strongly preferred)
+- Ashman's D > 2.0 (components well-separated)
+- Minimum component weight ≥ 0.15 (avoids spurious modes)
+
+**Interpretation:**
+Bimodal clusters may indicate:
+- Mixed property types incorrectly grouped together
+- Distinct sub-markets within the cluster
+- Invalid sales mixed with valid sales

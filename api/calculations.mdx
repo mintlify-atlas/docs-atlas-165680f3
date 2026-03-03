@@ -1,0 +1,204 @@
+---
+title: Calculations
+description: Functions for performing calculations and transformations on data
+---
+
+## perform_calculations
+
+```python
+perform_calculations(
+    df_in: pd.DataFrame, 
+    calc: dict, 
+    rename_map: dict = None
+) -> pd.DataFrame
+```
+
+Perform calculations on a DataFrame based on a dictionary of calculation instructions. This function creates new fields by applying various operations to existing fields.
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame.
+</ParamField>
+
+<ParamField path="calc" type="dict" required>
+  Dictionary of calculation instructions where keys are new field names and values are calculation expressions (lists).
+</ParamField>
+
+<ParamField path="rename_map" type="dict">
+  Optional mapping of original to renamed columns.
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame with calculations applied and new fields added.
+</ResponseField>
+
+### Supported Operations
+
+#### Arithmetic Operations
+
+- `+`, `-`, `*`, `/`: Basic arithmetic
+- `//`: Integer division
+- `/0`: Division with zero-safe handling
+- `min`, `max`: Element-wise minimum/maximum
+
+#### Type Conversions
+
+- `asint`, `asfloat`, `asstr`: Convert data types
+- `floor`, `ceil`, `round`: Rounding operations
+- `abs`: Absolute value
+
+#### String Operations
+
+- `strip`: Strip whitespace
+- `striplzero`: Strip leading zeros
+- `stripkey`: Strip whitespace and leading zeros
+- `split_before`, `split_after`: String splitting
+- `substr`: Substring extraction
+- `contains`, `contains_case_insensitive`: String contains
+- `replace`, `replace_regex`: String replacement
+
+#### Logical Operations
+
+- `==`, `!=`: Equality comparisons
+- `and`, `or`, `not`: Boolean logic
+- `where`: Conditional selection (ternary operator)
+- `isin`: Membership test
+
+#### Date/Time Operations
+
+- `datetime`: Parse datetime with format string
+- `datetimestr`: Parse and convert to string
+
+#### Special Operations
+
+- `set`: Set a value
+- `fillna`, `fillempty`: Fill missing values
+- `map`: Map values using a dictionary
+- `geo_area`: Calculate geometric area
+- `round_nearest`: Round to nearest multiple
+- `?`: Resolve filter expression
+
+### Examples
+
+```python
+# Calculate price per square foot
+calc = {
+    "price_per_sqft": ["/", "sale_price", "bldg_sqft"]
+}
+
+df = perform_calculations(df, calc)
+
+# Create a flag for high-value properties
+calc = {
+    "is_high_value": [">", "sale_price", 500000]
+}
+
+df = perform_calculations(df, calc)
+
+# Conditional calculation (ternary)
+calc = {
+    "adjusted_sqft": [
+        "where",
+        ["==", "is_vacant", True],
+        "land_sqft",
+        "bldg_sqft"
+    ]
+}
+
+df = perform_calculations(df, calc)
+
+# String manipulation
+calc = {
+    "property_id_clean": ["stripkey", "property_id"]
+}
+
+df = perform_calculations(df, calc)
+
+# Date parsing
+calc = {
+    "sale_date_parsed": ["datetime", "sale_date_str", "%Y-%m-%d"]
+}
+
+df = perform_calculations(df, calc)
+```
+
+---
+
+## perform_tweaks
+
+```python
+perform_tweaks(
+    df_in: pd.DataFrame, 
+    tweak: list, 
+    rename_map: dict = None
+) -> pd.DataFrame
+```
+
+Perform tweaks on a DataFrame based on a list of tweak instructions. Tweaks allow you to override specific field values based on key-value mappings.
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame.
+</ParamField>
+
+<ParamField path="tweak" type="list" required>
+  List of tweak instructions. Each entry should be a dict with:
+  - `field`: The field to modify
+  - `key`: The field to use for matching
+  - `values`: Dict mapping key values to new field values
+</ParamField>
+
+<ParamField path="rename_map" type="dict">
+  Optional mapping of original to renamed columns.
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame with tweaks applied.
+</ResponseField>
+
+### Example
+
+```python
+# Override neighborhood names for specific property IDs
+tweak = [
+    {
+        "field": "neighborhood",
+        "key": "property_id",
+        "values": {
+            "PROP001": "Downtown",
+            "PROP002": "Midtown",
+            "PROP003": "Uptown"
+        }
+    }
+]
+
+df = perform_tweaks(df, tweak)
+
+# Correct zoning codes for specific parcels
+tweak = [
+    {
+        "field": "zoning_code",
+        "key": "parcel_id",
+        "values": {
+            "12-34-56-78": "R1",
+            "23-45-67-89": "C2"
+        }
+    }
+]
+
+df = perform_tweaks(df, tweak)
+```
+
+---
+
+## resolve_filter
+
+```python
+resolve_filter(
+    df: pd.DataFrame, 
+    f: list, 
+    rename_map: dict = None
+) -> pd.Series
+```
+
+Resolve a filter list into a boolean Series. This function is imported from the `filters` module and used within calculations for conditional operations.
+
+See the [Filters API documentation](/api/filters#resolve_filter) for detailed information.

@@ -1,0 +1,146 @@
+---
+title: Data Cleaning
+description: Functions for cleaning and validating sales data in OpenAVM Kit
+---
+
+## clean_valid_sales
+
+```python
+clean_valid_sales(sup: SalesUniversePair, settings: dict) -> SalesUniversePair
+```
+
+Clean and validate sales data in the SalesUniversePair. This function processes the sales data to ensure that only valid sales are retained. It ensures that the sales data is consistent with the universe data, particularly regarding the vacancy status of parcels. Invalid sales are scrubbed of their metadata, and valid sales are properly classified for ratio studies.
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  The SalesUniversePair containing sales and universe data.
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  The settings dictionary containing configuration for the cleaning process. Should include:
+  - `modeling.metadata.use_sales_from`: Integer or dict specifying how far back to use sales (e.g., `{"improved": 2020, "vacant": 2018}`)
+</ParamField>
+
+<ResponseField name="return" type="SalesUniversePair">
+  The updated SalesUniversePair with cleaned and validated sales data. Sales are marked with:
+  - `valid_sale`: Boolean indicating if the sale is valid
+  - `valid_for_ratio_study`: Boolean indicating if valid for ratio studies
+  - `valid_for_land_ratio_study`: Boolean indicating if valid for land ratio studies
+</ResponseField>
+
+### Validation Logic
+
+The function applies several validation rules:
+
+1. **Time-based filtering**: Sales older than the configured threshold are marked invalid
+2. **Price validation**: Sales with null, zero, or negative prices are marked invalid
+3. **Vacancy consistency**: Sales are validated for ratio studies based on whether their vacancy status at time of sale matches current status
+4. **Metadata scrubbing**: Invalid sales have their sale-related fields (price, date, etc.) removed
+
+---
+
+## filter_invalid_sales
+
+```python
+filter_invalid_sales(
+    sup: SalesUniversePair, 
+    settings: dict, 
+    verbose: bool = False
+) -> SalesUniversePair
+```
+
+Validate arms-length sales based on configurable filter conditions. This function applies user-defined filters to identify and exclude invalid sales (e.g., non-arm's-length transactions, foreclosures, related-party sales).
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  The SalesUniversePair containing sales and universe data.
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  The settings dictionary containing configuration for arms-length validation. Should include:
+  - `data.process.invalid_sales.enabled`: Boolean to enable/disable filtering
+  - `data.process.invalid_sales.filter`: List of filter conditions to apply
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints detailed information about the validation process.
+</ParamField>
+
+<ResponseField name="return" type="SalesUniversePair">
+  The updated SalesUniversePair with arms-length validation applied. Invalid sales are removed from the sales data.
+</ResponseField>
+
+### Example
+
+```python
+settings = {
+    "data": {
+        "process": {
+            "invalid_sales": {
+                "enabled": True,
+                "filter": [
+                    ["and",
+                        ["!=", "deed_type", "str:FORECLOSURE"],
+                        [">", "sale_price", 10000]
+                    ]
+                ]
+            }
+        }
+    }
+}
+
+sup = filter_invalid_sales(sup, settings, verbose=True)
+```
+
+---
+
+## fill_unknown_values_sup
+
+```python
+fill_unknown_values_sup(
+    sup: SalesUniversePair, 
+    settings: dict
+) -> SalesUniversePair
+```
+
+Fill unknown values with default values as specified in settings. This function handles missing data by applying various fill strategies (mode, median, mean, zero, etc.) based on configuration.
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  The SalesUniversePair containing sales and universe data.
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  The settings dictionary containing configuration for filling unknown values. Should include:
+  - `data.process.fill`: Dictionary mapping fill strategies to field lists
+  - Supported strategies: `mode`, `median`, `mean`, `zero`, `unknown`, `false`, `custom`
+</ParamField>
+
+<ResponseField name="return" type="SalesUniversePair">
+  The updated SalesUniversePair with filled unknown values.
+</ResponseField>
+
+### Fill Strategies
+
+- **mode**: Fill with the most common value
+- **median**: Fill with the median value (numeric fields)
+- **mean**: Fill with the mean value (numeric fields)
+- **zero**: Fill with zero
+- **unknown**: Fill with "UNKNOWN" string
+- **false**: Fill with False (boolean fields)
+- **custom**: Fill with a custom value specified in the field entry
+
+### Example
+
+```python
+settings = {
+    "data": {
+        "process": {
+            "fill": {
+                "mode": ["neighborhood", "property_class"],
+                "zero": ["bldg_sqft", "land_sqft"],
+                "false": ["has_pool", "has_garage"]
+            }
+        }
+    }
+}
+
+sup = fill_unknown_values_sup(sup, settings)
+```

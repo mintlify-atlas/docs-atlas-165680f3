@@ -1,0 +1,538 @@
+---
+title: "settings"
+description: "Settings file loading, validation, and accessor functions"
+---
+
+The `settings` module provides comprehensive utilities for loading, validating, and accessing configuration settings for OpenAVM Kit, including field classifications, model groups, and locality-specific configurations.
+
+## Settings Loading
+
+### load_settings()
+
+Load settings file from disk and merge with templates.
+
+```python
+from openavmkit.utilities.settings import load_settings
+
+settings = load_settings(
+    settings_file='in/settings.json',
+    settings_object=None,
+    error=True,
+    warning=True
+)
+```
+
+<ParamField path="settings_file" type="str" default="'in/settings.json'">
+  Path to the settings file
+</ParamField>
+
+<ParamField path="settings_object" type="dict" default="None">
+  Already loaded settings object (if provided, settings_file is ignored)
+</ParamField>
+
+<ParamField path="error" type="bool" default="True">
+  Whether to raise errors or emit warnings if something is wrong
+</ParamField>
+
+<ParamField path="warning" type="bool" default="True">
+  Whether to emit warnings if something is wrong
+</ParamField>
+
+<ResponseField name="settings" type="dict">
+  The settings object, merged with templates and with variables replaced. Returns `None` if settings cannot be loaded.
+</ResponseField>
+
+---
+
+## Field Classification
+
+### get_fields_land()
+
+Get all fields classified as pertaining to land.
+
+```python
+from openavmkit.utilities.settings import get_fields_land
+
+fields = get_fields_land(settings, df)
+# Returns: {'categorical': [...], 'numeric': [...], 'boolean': [...]}
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to filter fields by presence
+</ParamField>
+
+<ResponseField name="fields" type="dict">
+  Dictionary containing:
+  - `categorical`: list of categorical land fields
+  - `numeric`: list of numerical land fields
+  - `boolean`: list of boolean land fields
+  
+  Automatically includes spatial fields like `dist_to_*`, `within_*`, `proximity_to_*`, and `spatial_lag_*`.
+</ResponseField>
+
+---
+
+### get_fields_land_as_list()
+
+Get all land fields as a single flat list.
+
+```python
+fields = get_fields_land_as_list(settings, df)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to filter fields
+</ParamField>
+
+<ResponseField name="fields" type="list[str]">
+  Flat list of all land field names
+</ResponseField>
+
+---
+
+### get_fields_impr()
+
+Get all fields classified as pertaining to buildings/improvements.
+
+```python
+fields = get_fields_impr(settings, df)
+# Returns: {'categorical': [...], 'numeric': [...], 'boolean': [...]}
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to filter fields
+</ParamField>
+
+<ResponseField name="fields" type="dict">
+  Dictionary with `categorical`, `numeric`, and `boolean` keys
+</ResponseField>
+
+---
+
+### get_fields_categorical()
+
+Retrieve categorical field names based on settings.
+
+```python
+from openavmkit.utilities.settings import get_fields_categorical
+
+cat_fields = get_fields_categorical(
+    settings,
+    df=None,
+    include_boolean=False,
+    types=['land', 'impr', 'other']
+)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  DataFrame to filter fields by presence
+</ParamField>
+
+<ParamField path="include_boolean" type="bool" default="False">
+  Whether to include boolean fields
+</ParamField>
+
+<ParamField path="types" type="list[str]" default="['land', 'impr', 'other']">
+  Field classification types to include
+</ParamField>
+
+<ResponseField name="fields" type="list[str]">
+  List of categorical field names
+</ResponseField>
+
+---
+
+### get_fields_numeric()
+
+Retrieve numeric field names based on settings.
+
+```python
+numeric_fields = get_fields_numeric(
+    settings,
+    df=None,
+    include_boolean=False,
+    types=['land', 'impr', 'other']
+)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  DataFrame to filter fields by presence
+</ParamField>
+
+<ParamField path="include_boolean" type="bool" default="False">
+  Whether to include boolean fields
+</ParamField>
+
+<ParamField path="types" type="list[str]" default="['land', 'impr', 'other']">
+  Field classification types to include
+</ParamField>
+
+<ResponseField name="fields" type="list[str]">
+  List of numeric field names
+</ResponseField>
+
+---
+
+### get_fields_boolean()
+
+Retrieve boolean field names based on settings.
+
+```python
+bool_fields = get_fields_boolean(
+    settings,
+    df=None,
+    types=['land', 'impr', 'other']
+)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  DataFrame to filter fields by presence
+</ParamField>
+
+<ParamField path="types" type="list[str]" default="['land', 'impr', 'other']">
+  Field classification types to include
+</ParamField>
+
+<ResponseField name="fields" type="list[str]">
+  List of boolean field names
+</ResponseField>
+
+---
+
+## Model Configuration
+
+### get_model_group()
+
+Get a model group definition object from settings.
+
+```python
+from openavmkit.utilities.settings import get_model_group
+
+model_group = get_model_group(settings, 'single_family')
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="key" type="str" required>
+  The name of the model group
+</ParamField>
+
+<ResponseField name="model_group" type="dict">
+  Model group definition containing configuration for that model group
+</ResponseField>
+
+---
+
+### get_model_group_ids()
+
+Get all model group IDs in the preferred order.
+
+```python
+from openavmkit.utilities.settings import get_model_group_ids
+
+ids = get_model_group_ids(settings, df=None)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Optional DataFrame to filter by model groups present in the data
+</ParamField>
+
+<ResponseField name="ids" type="list[str]">
+  Ordered list of model group IDs
+</ResponseField>
+
+---
+
+## Locality Settings
+
+### get_valuation_date()
+
+Get the valuation date from settings.
+
+```python
+from openavmkit.utilities.settings import get_valuation_date
+from datetime import datetime
+
+val_date = get_valuation_date(settings)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="date" type="datetime">
+  The valuation date. Defaults to January 1 of current year if not specified in settings.
+</ResponseField>
+
+---
+
+### get_look_back_dates()
+
+Get the look-back date range for ratio studies.
+
+```python
+from openavmkit.utilities.settings import get_look_back_dates
+
+look_back_date, val_date = get_look_back_dates(settings)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="return" type="tuple[datetime, datetime]">
+  Tuple containing:
+  - `look_back_date`: Start of the look-back period
+  - `val_date`: Valuation date (end of period)
+</ResponseField>
+
+---
+
+### get_center()
+
+Get the centroid of the locality.
+
+```python
+from openavmkit.utilities.settings import get_center
+
+lon, lat = get_center(settings, gdf=None)
+```
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" default="None">
+  Optional parcel geometry to calculate centroid from if not in settings
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float]">
+  Tuple of (longitude, latitude)
+</ResponseField>
+
+---
+
+## Unit Conversions
+
+### area_unit()
+
+Get the designated small area unit.
+
+```python
+from openavmkit.utilities.settings import area_unit
+
+unit = area_unit(settings)  # Returns 'sqft' or 'sqm'
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="unit" type="str">
+  `'sqft'` if units are imperial, `'sqm'` if metric
+</ResponseField>
+
+---
+
+### big_area_unit()
+
+Get the designated large area unit.
+
+```python
+unit = big_area_unit(settings)  # Returns 'acre' or 'ha'
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="unit" type="str">
+  `'acre'` if units are imperial, `'ha'` (hectare) if metric
+</ResponseField>
+
+---
+
+### length_unit()
+
+Get the designated small length unit.
+
+```python
+unit = length_unit(settings)  # Returns 'ft' or 'm'
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="unit" type="str">
+  `'ft'` if units are imperial, `'m'` if metric
+</ResponseField>
+
+---
+
+### big_length_unit()
+
+Get the designated large length unit.
+
+```python
+unit = big_length_unit(settings)  # Returns 'mi' or 'km'
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="unit" type="str">
+  `'mi'` if units are imperial, `'km'` if metric
+</ResponseField>
+
+---
+
+## Data Dictionary
+
+### get_data_dictionary()
+
+Get the data dictionary object.
+
+```python
+from openavmkit.utilities.settings import get_data_dictionary
+
+dd = get_data_dictionary(settings)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ResponseField name="data_dictionary" type="dict">
+  The data dictionary for this locality, mapping field names to their metadata
+</ResponseField>
+
+---
+
+### get_grouped_fields_from_data_dictionary()
+
+Get all field names from a specific group in the data dictionary.
+
+```python
+from openavmkit.utilities.settings import get_grouped_fields_from_data_dictionary
+
+fields = get_grouped_fields_from_data_dictionary(
+    dd,
+    group='property_characteristics',
+    types=['number', 'percent']
+)
+```
+
+<ParamField path="dd" type="dict" required>
+  The data dictionary
+</ParamField>
+
+<ParamField path="group" type="str" required>
+  Name of a particular group in the data dictionary
+</ParamField>
+
+<ParamField path="types" type="list" default="None">
+  Optional list of types to filter by: `'boolean'`, `'str'`, `'number'`, `'percent'`, `'date'`
+</ParamField>
+
+<ResponseField name="fields" type="list[str]">
+  List of field names belonging to the specified group
+</ResponseField>
+
+---
+
+## Variable Interactions
+
+### get_variable_interactions()
+
+Get variable interaction information from a model group configuration.
+
+```python
+from openavmkit.utilities.settings import get_variable_interactions
+
+model_group = get_model_group(settings, 'single_family')
+interactions = get_variable_interactions(model_group, settings, df)
+```
+
+<ParamField path="entry" type="dict" required>
+  Model group dictionary that may contain variable interactions
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Global settings dictionary
+</ParamField>
+
+<ParamField path="df" type="pd.DataFrame" default="None">
+  Your dataset
+</ParamField>
+
+<ResponseField name="interactions" type="dict">
+  Dictionary mapping field names to other field names for variable interactions.
+  
+  For example, `{'neighborhood': 'land_area_sqft'}` means each one-hot-encoded neighborhood dummy will be multiplied by the land area value.
+</ResponseField>
+
+---
+
+## Usage Example
+
+```python
+import pandas as pd
+from openavmkit.utilities.settings import (
+    load_settings,
+    get_fields_land_as_list,
+    get_fields_impr_as_list,
+    get_valuation_date,
+    area_unit
+)
+
+# Load settings
+settings = load_settings('in/settings.json')
+
+# Get field classifications
+land_fields = get_fields_land_as_list(settings, df)
+impr_fields = get_fields_impr_as_list(settings, df)
+
+# Get valuation date
+val_date = get_valuation_date(settings)
+print(f"Valuation date: {val_date}")
+
+# Get unit system
+area = area_unit(settings)
+print(f"Using {area} for area measurements")
+
+# Get model groups
+model_groups = get_model_group_ids(settings, df)
+print(f"Model groups: {model_groups}")
+```

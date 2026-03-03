@@ -1,0 +1,292 @@
+---
+title: "Cloud Storage"
+description: "Synchronize data with cloud storage services including Azure, HuggingFace, and SFTP"
+---
+
+## Overview
+
+The cloud module provides a unified interface for synchronizing data between your local machine and various cloud storage services. It supports Azure Blob Storage, HuggingFace datasets, and SFTP servers.
+
+## Main Functions
+
+### init
+
+```python
+init(verbose: bool, cloud_settings: dict) -> CloudService | None
+```
+
+Creates a CloudService object based on user settings.
+
+<ParamField path="verbose" type="bool">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="cloud_settings" type="dict">
+  Cloud settings dictionary loaded from cloud.json
+</ParamField>
+
+<ResponseField name="CloudService" type="CloudService | None">
+  Initialized CloudService object, or None if cloud is disabled
+</ResponseField>
+
+### load_cloud_settings
+
+```python
+load_cloud_settings(filepath: str = "cloud.json") -> dict
+```
+
+Load cloud settings file from disk.
+
+<ParamField path="filepath" type="str" default="cloud.json">
+  Path to the cloud settings JSON file
+</ParamField>
+
+<ResponseField name="settings" type="dict">
+  The cloud settings object
+</ResponseField>
+
+## CloudService Base Class
+
+The `CloudService` class provides a unified interface for all cloud storage providers.
+
+### list_files
+
+```python
+list_files(remote_path: str) -> list[CloudFile]
+```
+
+List all files at the given path on the cloud storage service.
+
+<ParamField path="remote_path" type="str">
+  Path on the remote service you want to query
+</ParamField>
+
+<ResponseField name="files" type="list[CloudFile]">
+  A listing of all files contained within the queried path
+</ResponseField>
+
+### download_file
+
+```python
+download_file(remote_file: CloudFile, local_file_path: str)
+```
+
+Download a remote file from the cloud storage service.
+
+<ParamField path="remote_file" type="CloudFile">
+  The file to download
+</ParamField>
+
+<ParamField path="local_file_path" type="str">
+  The path on your local computer where you want to save the remote file
+</ParamField>
+
+### upload_file
+
+```python
+upload_file(remote_file_path: str, local_file_path: str)
+```
+
+Upload a local file to the cloud storage service.
+
+<ParamField path="remote_file_path" type="str">
+  The remote path on the cloud storage service where you want to upload your file
+</ParamField>
+
+<ParamField path="local_file_path" type="str">
+  The local path to the file you want to upload
+</ParamField>
+
+### sync_files
+
+```python
+sync_files(
+    locality: str,
+    local_folder: str,
+    remote_folder: str,
+    dry_run: bool = False,
+    verbose: bool = False,
+    ignore_paths: list[str] = None
+)
+```
+
+Synchronize files between your local computer and the cloud storage service.
+
+<ParamField path="locality" type="str">
+  Unique identifier for a locality/project
+</ParamField>
+
+<ParamField path="local_folder" type="str">
+  Path on your local computer
+</ParamField>
+
+<ParamField path="remote_folder" type="str">
+  Path on the remote cloud storage service
+</ParamField>
+
+<ParamField path="dry_run" type="bool" default="False">
+  Prints all operations that would run, but does not execute them
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="ignore_paths" type="list[str]" optional>
+  List of paths that should NOT be synchronized. Anything within a matching directory will be skipped
+</ParamField>
+
+## Azure Storage
+
+### AzureService
+
+Azure-specific CloudService for working with Azure Blob Storage.
+
+```python
+AzureService(
+    credentials: AzureCredentials,
+    container_name: str,
+    access: CloudAccess
+)
+```
+
+<ParamField path="credentials" type="AzureCredentials">
+  Authentication credentials for Azure
+</ParamField>
+
+<ParamField path="container_name" type="str">
+  The name of your Azure container
+</ParamField>
+
+<ParamField path="access" type="CloudAccess">
+  Access permission ("read_only" or "read_write")
+</ParamField>
+
+### get_creds_from_env_azure
+
+```python
+get_creds_from_env_azure() -> AzureCredentials
+```
+
+Reads and returns Azure credentials from environment settings.
+
+<ResponseField name="credentials" type="AzureCredentials">
+  The credentials for Azure stored in environment variable `AZURE_STORAGE_CONNECTION_STRING`
+</ResponseField>
+
+## HuggingFace Storage
+
+### HuggingFaceService
+
+HuggingFace-specific CloudService for working with HuggingFace datasets.
+
+```python
+HuggingFaceService(
+    credentials: HuggingFaceCredentials,
+    repo_id: str,
+    access: CloudAccess,
+    revision: str = "main"
+)
+```
+
+<ParamField path="credentials" type="HuggingFaceCredentials">
+  Authentication credentials for HuggingFace
+</ParamField>
+
+<ParamField path="repo_id" type="str">
+  Repository identifier
+</ParamField>
+
+<ParamField path="access" type="CloudAccess">
+  Access permission ("read_only" or "read_write")
+</ParamField>
+
+<ParamField path="revision" type="str" default="main">
+  Revision identifier (branch name)
+</ParamField>
+
+### get_creds_from_env_huggingface
+
+```python
+get_creds_from_env_huggingface() -> HuggingFaceCredentials
+```
+
+Reads and returns HuggingFace credentials from environment settings.
+
+<ResponseField name="credentials" type="HuggingFaceCredentials">
+  The credentials for HuggingFace stored in environment variable `HF_TOKEN`
+</ResponseField>
+
+## SFTP Storage
+
+### SFTPService
+
+SFTP-specific CloudService for working with SFTP servers.
+
+```python
+SFTPService(
+    credentials: SFTPCredentials,
+    access: CloudAccess,
+    base_path: str = ".",
+    timeout: int = 30,
+    retries: int = 3
+)
+```
+
+<ParamField path="credentials" type="SFTPCredentials">
+  Your SFTP credentials
+</ParamField>
+
+<ParamField path="access" type="CloudAccess">
+  Access permission ("read_only" or "read_write")
+</ParamField>
+
+<ParamField path="base_path" type="str" default=".">
+  Base path on the remote SFTP server
+</ParamField>
+
+<ParamField path="timeout" type="int" default="30">
+  How long of a delay to tolerate before ruling it a timeout (in seconds)
+</ParamField>
+
+<ParamField path="retries" type="int" default="3">
+  How many times to retry a failed connection before giving up
+</ParamField>
+
+### get_creds_from_env_sftp
+
+```python
+get_creds_from_env_sftp() -> SFTPCredentials
+```
+
+Reads and returns SFTP credentials from environment settings.
+
+<ResponseField name="credentials" type="SFTPCredentials">
+  The credentials for SFTP from environment variables:
+  - `SFTP_HOSTNAME` - Server hostname
+  - `SFTP_PORT` - Port number (default: 22)
+  - `SFTP_USERNAME` - Username
+  - `SFTP_PASSWORD` - Password (optional if using key)
+  - `SFTP_KEY_FILENAME` - Path to SSH key file (optional if using password)
+</ResponseField>
+
+## Example Usage
+
+```python
+from openavmkit.cloud.cloud import init, load_cloud_settings
+
+# Load cloud settings from cloud.json
+settings = load_cloud_settings("cloud.json")
+
+# Initialize cloud service
+cloud = init(verbose=True, cloud_settings=settings)
+
+# Sync files
+if cloud:
+    cloud.sync_files(
+        locality="cook-il",
+        local_folder="out/results",
+        remote_folder="results/cook-il",
+        verbose=True
+    )
+```

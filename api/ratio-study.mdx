@@ -1,0 +1,207 @@
+---
+title: Ratio Study
+description: IAAO-standard ratio study implementation for assessment quality analysis
+---
+
+The ratio study module implements IAAO (International Association of Assessing Officers) standard ratio studies to evaluate assessment quality and equity. Ratio studies compare assessed values to sale prices to measure accuracy and uniformity.
+
+## Classes
+
+### RatioStudy
+
+Performs an IAAO-standard Ratio Study, generating all the relevant statistics.
+
+**Attributes:**
+- `predictions` (np.ndarray): Series representing predicted values
+- `ground_truth` (np.ndarray): Series representing ground truth values (typically observed sale prices)
+- `count` (int): The number of observations
+- `median_ratio` (float): The median value of all prediction/ground_truth ratios
+- `mean_ratio` (float): The mean value of all prediction/ground_truth ratios
+- `cod` (float): The coefficient of dispersion, a measure of variability (lower is better)
+- `cod_trim` (float): The coefficient of dispersion after outlier ratios outside the interquartile range have been trimmed
+- `prd` (float): The price-related differential, a measure of vertical equity
+- `prb` (float): The price-related bias, a measure of vertical equity
+
+#### `__init__`
+
+```python
+RatioStudy(
+    predictions: np.ndarray,
+    ground_truth: np.ndarray,
+    max_trim: float
+)
+```
+
+<ParamField path="predictions" type="np.ndarray">
+  Series representing predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="np.ndarray">
+  Series representing ground truth values (typically observed sale prices)
+</ParamField>
+
+<ParamField path="max_trim" type="float">
+  The maximum amount of records allowed to be trimmed in a ratio study
+</ParamField>
+
+#### `summary()`
+
+Generate a summary DataFrame of the ratio study results.
+
+```python
+summary(stats: list[str] = None)
+```
+
+<ParamField path="stats" type="list[str]" default="None">
+  List of statistics to include. If None, includes all available statistics.
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame containing the summary statistics for both untrimmed and trimmed data
+</ResponseField>
+
+---
+
+### RatioStudyBootstrapped
+
+Performs an IAAO-standard Ratio Study with confidence intervals using bootstrap resampling.
+
+**Attributes:**
+- `iterations` (float): Number of bootstrap iterations
+- `confidence_interval` (float): The confidence interval (e.g. 0.95 for 95% confidence)
+- `median_ratio` (ConfidenceStat): The median value of all prediction/ground_truth ratios with confidence intervals
+- `mean_ratio` (ConfidenceStat): The mean value of all prediction/ground_truth ratios with confidence intervals
+- `cod` (ConfidenceStat): The coefficient of dispersion with confidence intervals
+- `prd` (ConfidenceStat): The price-related differential with confidence intervals
+- `median_ratio_trim` (ConfidenceStat): The median value of trimmed ratios with confidence intervals
+- `mean_ratio_trim` (ConfidenceStat): The mean value of trimmed ratios with confidence intervals
+- `cod_trim` (ConfidenceStat): The coefficient of dispersion for trimmed data with confidence intervals
+- `prd_trim` (ConfidenceStat): The price-related differential for trimmed data with confidence intervals
+
+#### `__init__`
+
+```python
+RatioStudyBootstrapped(
+    predictions: np.ndarray,
+    ground_truth: np.ndarray,
+    max_trim: float,
+    confidence_interval: float = 0.95,
+    iterations: int = 1000
+)
+```
+
+<ParamField path="predictions" type="np.ndarray">
+  Series representing predicted values
+</ParamField>
+
+<ParamField path="ground_truth" type="np.ndarray">
+  Series representing ground truth values (typically observed sale prices)
+</ParamField>
+
+<ParamField path="max_trim" type="float">
+  The maximum amount of records allowed to be trimmed in a ratio study
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" default="0.95">
+  Desired confidence interval (default is 0.95, indicating 95% confidence)
+</ParamField>
+
+<ParamField path="iterations" type="int" default="1000">
+  How many bootstrap iterations to perform
+</ParamField>
+
+#### `summary()`
+
+Generate a summary DataFrame of the bootstrapped ratio study results.
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame containing the summary statistics with confidence intervals for both untrimmed and trimmed data
+</ResponseField>
+
+---
+
+## Functions
+
+### run_and_write_ratio_study_breakdowns
+
+Runs ratio studies with breakdowns and writes them to disk.
+
+```python
+run_and_write_ratio_study_breakdowns(settings: dict)
+```
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+---
+
+## Metrics
+
+### Coefficient of Dispersion (COD)
+
+The COD measures the average deviation of ratios from the median ratio. It is calculated as:
+
+**Formula:**
+```
+COD = (Average Absolute Deviation from Median Ratio / Median Ratio) × 100
+```
+
+**Interpretation:**
+- Lower COD indicates more uniform assessments
+- IAAO standards:
+  - Single-family residential: COD ≤ 15.0
+  - Income-producing properties: COD ≤ 20.0
+  - Vacant land: COD ≤ 20.0
+
+---
+
+### Price-Related Differential (PRD)
+
+The PRD measures the relationship between assessed values and sale prices across price levels.
+
+**Formula:**
+```
+PRD = (Mean Ratio) / (Weighted Mean Ratio)
+```
+
+where Weighted Mean Ratio = Sum(Assessed Values) / Sum(Sale Prices)
+
+**Interpretation:**
+- PRD = 1.00: No price-related bias
+- PRD > 1.00: Higher-value properties are under-assessed (regressive)
+- PRD < 1.00: Lower-value properties are under-assessed (progressive)
+- IAAO standards: 0.98 ≤ PRD ≤ 1.03
+
+---
+
+### Price-Related Bias (PRB)
+
+The PRB measures systematic relationship between assessment ratios and sale prices.
+
+**Formula:**
+```
+PRB = 2 × β₁ / (β₀ + β₁ × median_price)
+```
+
+where β₀ and β₁ are coefficients from regressing (Assessed - Sale Price) on (Assessed + Sale Price)/2
+
+**Interpretation:**
+- PRB = 0: No price-related bias
+- PRB > 0: Regressive (higher-value properties under-assessed)
+- PRB < 0: Progressive (lower-value properties under-assessed)
+- IAAO standards:
+  - Recommended: -0.05 ≤ PRB ≤ 0.05
+  - Acceptable: -0.10 ≤ PRB ≤ 0.10
+
+---
+
+### Median Ratio
+
+The median of all assessment ratios (Assessed Value / Sale Price).
+
+**Interpretation:**
+- Median Ratio = 1.00: Assessments match market values on average
+- Median Ratio > 1.00: Over-assessment
+- Median Ratio < 1.00: Under-assessment
+- IAAO standards: 0.90 ≤ Median Ratio ≤ 1.10

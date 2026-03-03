@@ -1,0 +1,395 @@
+---
+title: SHAP Analysis
+description: SHAP value calculation and interpretation utilities for tree-based models
+---
+
+The shap_analysis module provides comprehensive SHAP (SHapley Additive exPlanations) value calculation and visualization tools for XGBoost, LightGBM, and CatBoost models. SHAP values explain individual predictions by quantifying each feature's contribution.
+
+## Core Functions
+
+### get_full_model_shaps
+
+```python
+get_full_model_shaps(
+    model: XGBoostModel | LightGBMModel | CatBoostModel,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    X_sales: pd.DataFrame,
+    X_univ: pd.DataFrame,
+    verbose: bool = False
+) -> dict
+```
+
+Calculate SHAP values for all data subsets (train, test, sales, universe) from a trained model.
+
+This is the primary function for generating comprehensive SHAP explanations across all relevant datasets in a typical AVM workflow.
+
+<ParamField path="model" type="XGBoostModel | LightGBMModel | CatBoostModel" required>
+  Trained prediction model (must be one of the supported tree-based models)
+</ParamField>
+
+<ParamField path="X_train" type="pd.DataFrame" required>
+  Training set features (independent variables)
+</ParamField>
+
+<ParamField path="X_test" type="pd.DataFrame" required>
+  Test set features
+</ParamField>
+
+<ParamField path="X_sales" type="pd.DataFrame" required>
+  Sales data features
+</ParamField>
+
+<ParamField path="X_univ" type="pd.DataFrame" required>
+  Universe (full population) features
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Print detailed progress information during SHAP calculation
+</ParamField>
+
+<ResponseField name="shap_dict" type="dict">
+  Dictionary containing `shap.Explanation` objects with keys:
+  - `"train"`: SHAP values for training data
+  - `"test"`: SHAP values for test data
+  - `"sales"`: SHAP values for sales data
+  - `"univ"`: SHAP values for universe data
+</ResponseField>
+
+**Performance Notes:**
+- XGBoost: Uses approximate mode by default for speed
+- LightGBM: Uses exact native `pred_contrib=True` method
+- CatBoost: Uses native `get_feature_importance(type="ShapValues")` with approximate mode
+
+---
+
+### make_shap_table
+
+```python
+make_shap_table(
+    expl: shap.Explanation,
+    list_keys: list[str],
+    list_vars: list[str],
+    list_keys_sale: list[str] = None,
+    include_pred: bool = True
+) -> pd.DataFrame
+```
+
+Convert SHAP explanation into a tabular DataFrame breaking down feature contributions.
+
+This function transforms SHAP values into a flat table format suitable for analysis, export, or further processing.
+
+<ParamField path="expl" type="shap.Explanation" required>
+  SHAP Explanation object (output from `get_full_model_shaps` or tree explainer)
+</ParamField>
+
+<ParamField path="list_keys" type="list[str]" required>
+  Primary keys in the same row order as explained data (e.g., parcel IDs)
+</ParamField>
+
+<ParamField path="list_vars" type="list[str]" required>
+  Feature names in canonical training order
+</ParamField>
+
+<ParamField path="list_keys_sale" type="list[str]" default="None">
+  Optional transaction keys (for sales data)
+</ParamField>
+
+<ParamField path="include_pred" type="bool" default="True">
+  Include a column reconstructing the model prediction: `base_value + sum(SHAP values)`
+</ParamField>
+
+<ResponseField name="df_shap" type="pd.DataFrame">
+  DataFrame with columns:
+  - `key`: Primary identifier
+  - `key_sale`: Transaction identifier (if provided)
+  - `base_value`: Model's base prediction value
+  - One column per feature with SHAP contribution values
+  - `contribution_sum`: Reconstructed prediction (if `include_pred=True`)
+</ResponseField>
+
+**Column Order:** `[key, key_sale?, base_value, feature_1, feature_2, ..., feature_n, contribution_sum?]`
+
+---
+
+### plot_full_beeswarm
+
+```python
+plot_full_beeswarm(
+    explanation: shap.Explanation,
+    title: str = "SHAP Beeswarm",
+    save_path: str | None = None,
+    save_kwargs: dict | None = None,
+    wrap_width: int = 20
+) -> None
+```
+
+Create a comprehensive SHAP beeswarm plot with wrapped feature names.
+
+Beeswarm plots show the distribution of SHAP values for each feature, with color indicating feature value magnitude.
+
+<ParamField path="explanation" type="shap.Explanation" required>
+  SHAP Explanation object to visualize
+</ParamField>
+
+<ParamField path="title" type="str" default="SHAP Beeswarm">
+  Plot title
+</ParamField>
+
+<ParamField path="save_path" type="str" default="None">
+  Optional file path to save figure (e.g., `"plots/shap_beeswarm.png"`)
+  Format inferred from extension (.png, .pdf, .svg)
+</ParamField>
+
+<ParamField path="save_kwargs" type="dict" default="None">
+  Additional arguments for `plt.savefig()` (e.g., `{"dpi": 300, "bbox_inches": "tight"}`)
+</ParamField>
+
+<ParamField path="wrap_width" type="int" default="20">
+  Maximum character width for feature name wrapping
+</ParamField>
+
+**Features:**
+- Automatic figure sizing based on feature count
+- Wrapped feature names for readability
+- Color-coded by feature value (red = high, blue = low)
+- Sorted by mean absolute SHAP value
+
+---
+
+## Private Helper Functions
+
+### _xgboost_shap
+
+```python
+_xgboost_shap(
+    model: XGBoostModel,
+    X_train: pd.DataFrame,
+    background_size: int = 100,
+    approximate: bool = True,
+    check_additivity: bool = False
+) -> shap.TreeExplainer
+```
+
+Create a SHAP TreeExplainer for XGBoost models with categorical feature support.
+
+**Settings:**
+- Uses `tree_path_dependent` perturbation for categorical splits
+- Enables categorical DMatrix properties automatically
+
+---
+
+### _lightgbm_shap
+
+```python
+_lightgbm_shap(
+    model: LightGBMModel,
+    X_train: pd.DataFrame,
+    background_size: int = 100,
+    approximate: bool = True,
+    check_additivity: bool = False
+) -> shap.TreeExplainer
+```
+
+Create a SHAP TreeExplainer for LightGBM models.
+
+**Behavior:**
+- With categorical features: uses `tree_path_dependent` mode without background data
+- Without categorical features: uses `interventional` mode with background samples
+
+---
+
+### _catboost_shap
+
+```python
+_catboost_shap(
+    model: CatBoostModel,
+    X_train: pd.DataFrame,
+    background_size: int = 100,
+    approximate: bool = True,
+    check_additivity: bool = False
+) -> shap.TreeExplainer
+```
+
+Create a SHAP TreeExplainer for CatBoost models.
+
+**Settings:**
+- Uses `tree_path_dependent` mode (required for categorical splits)
+- Tags explainer with `_cb_model` attribute for special handling
+
+---
+
+### _shap_explain
+
+```python
+_shap_explain(
+    model_type: str,
+    te: shap.TreeExplainer,
+    X_to_explain: pd.DataFrame,
+    approximate: bool = True,
+    check_additivity: bool = False,
+    cat_data: TreeBasedCategoricalData | None = None,
+    verbose: bool = False,
+    label: str = ""
+) -> shap.Explanation
+```
+
+Internal function that computes SHAP values using the appropriate backend for each model type.
+
+**Fast Paths:**
+- **CatBoost**: Uses native `get_feature_importance(type="ShapValues")` with "Approximate" mode
+- **LightGBM**: Uses native `booster.predict(pred_contrib=True)` for speed
+- **XGBoost**: Uses standard TreeExplainer with categorical support
+
+---
+
+## Usage Examples
+
+### Example 1: Calculate SHAP Values for All Datasets
+
+```python
+from openavmkit.shap_analysis import get_full_model_shaps, plot_full_beeswarm
+from openavmkit.modeling import XGBoostModel
+
+# Train model (simplified)
+model = XGBoostModel()
+model.fit(X_train, y_train)
+
+# Calculate SHAP values for all subsets
+shap_results = get_full_model_shaps(
+    model=model,
+    X_train=X_train,
+    X_test=X_test,
+    X_sales=X_sales,
+    X_univ=X_universe,
+    verbose=True
+)
+
+# Visualize test set SHAP values
+plot_full_beeswarm(
+    shap_results["test"],
+    title="SHAP Values - Test Set",
+    save_path="plots/shap_test_beeswarm.png",
+    save_kwargs={"dpi": 300, "bbox_inches": "tight"}
+)
+```
+
+### Example 2: Create SHAP Contribution Table
+
+```python
+from openavmkit.shap_analysis import make_shap_table
+
+# Convert SHAP values to tabular format
+df_shap = make_shap_table(
+    expl=shap_results["univ"],
+    list_keys=df_universe["key"].tolist(),
+    list_vars=feature_names,
+    include_pred=True
+)
+
+# Inspect contributions
+print(df_shap.head())
+#     key  base_value  bldg_area  land_area  age  ...  contribution_sum
+# 0  P001     11.852      0.324     0.156   -0.089 ...           12.243
+# 1  P002     11.852      0.187     0.098   -0.034 ...           12.103
+
+# Find properties where age has large negative impact
+df_age_impact = df_shap[df_shap["age"] < -0.5]
+print(f"Properties with age reducing value by >50%: {len(df_age_impact)}")
+
+# Export for further analysis
+df_shap.to_csv("out/shap_contributions_universe.csv", index=False)
+```
+
+### Example 3: Compare Feature Importance Across Subsets
+
+```python
+import numpy as np
+import pandas as pd
+
+# Calculate mean absolute SHAP values for each subset
+subsets = ["train", "test", "sales", "univ"]
+importance_data = {}
+
+for subset in subsets:
+    shap_vals = shap_results[subset].values
+    mean_abs_shap = np.abs(shap_vals).mean(axis=0)
+    importance_data[subset] = mean_abs_shap
+
+df_importance = pd.DataFrame(
+    importance_data,
+    index=feature_names
+).sort_values(by="test", ascending=False)
+
+print(df_importance.head(10))
+#                      train    test   sales    univ
+# bldg_area_finished   0.432   0.428   0.445   0.431
+# land_area            0.287   0.289   0.312   0.285
+# age                  0.156   0.162   0.178   0.154
+```
+
+### Example 4: Individual Prediction Explanation
+
+```python
+# Explain a single property's valuation
+property_idx = 42
+shap_table = make_shap_table(
+    shap_results["univ"],
+    list_keys=df_universe["key"].tolist(),
+    list_vars=feature_names
+)
+
+property_shap = shap_table.iloc[property_idx]
+print(f"Property: {property_shap['key']}")
+print(f"Base Value: ${np.exp(property_shap['base_value']):,.0f}")
+print(f"Predicted Value: ${np.exp(property_shap['contribution_sum']):,.0f}")
+print("\nTop 5 Positive Contributors:")
+
+contributions = property_shap.drop(['key', 'base_value', 'contribution_sum'])
+top_positive = contributions.nlargest(5)
+for feature, value in top_positive.items():
+    print(f"  {feature}: +${np.exp(value)-1:,.0f}")
+
+print("\nTop 5 Negative Contributors:")
+top_negative = contributions.nsmallest(5)
+for feature, value in top_negative.items():
+    print(f"  {feature}: -${1-np.exp(value):,.0f}")
+```
+
+## Understanding SHAP Values
+
+### What SHAP Values Represent
+
+- **Base Value**: Average model prediction across training data
+- **SHAP Value**: Change in prediction (on log scale for log models) attributable to that feature
+- **Prediction**: `base_value + sum(all SHAP values)`
+
+### Interpretation
+
+- **Positive SHAP value**: Feature increases predicted value
+- **Negative SHAP value**: Feature decreases predicted value
+- **Magnitude**: Larger absolute values = stronger influence
+- **Additivity**: SHAP values sum exactly to the prediction
+
+### For Log-Scale Models
+
+If your model predicts `log(price)`, SHAP values are also on log scale:
+
+```python
+# Convert from log scale to dollar impact
+base_price = np.exp(base_value)
+feature_impact_dollars = base_price * (np.exp(shap_value) - 1)
+```
+
+## Model Support Matrix
+
+| Model Type | Categorical Support | Approximate Mode | Native SHAP |
+|------------|---------------------|------------------|-------------|
+| XGBoost    | ✓                   | ✓                | via TreeExplainer |
+| LightGBM   | ✓                   | ✗                | ✓ (pred_contrib) |
+| CatBoost   | ✓                   | ✓                | ✓ (get_feature_importance) |
+
+**Notes:**
+- All models support categorical features through appropriate handling
+- LightGBM's native method is exact and fast
+- CatBoost's "Approximate" mode provides significant speed gains

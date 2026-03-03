@@ -1,0 +1,203 @@
+---
+title: Assessment Quality Metrics
+description: Learn about quality metrics and evaluation approaches for mass appraisal models
+---
+
+## Overview
+
+Assessment quality evaluation is fundamental to mass appraisal. OpenAVM Kit provides comprehensive metrics and statistical tools to measure model performance against industry standards.
+
+<Info>
+Quality metrics help assessors demonstrate compliance with IAAO standards and identify areas for improvement in their valuation models.
+</Info>
+
+## Key Quality Dimensions
+
+### Accuracy
+
+Accuracy measures how close predicted values are to actual sale prices. The primary metrics include:
+
+- **Median Ratio**: The median of all assessment-to-sale price ratios
+- **Mean Ratio**: The average of all assessment-to-sale price ratios
+- **MAPE**: Mean Absolute Percentage Error
+
+### Uniformity
+
+Uniformity measures consistency of assessment levels across properties:
+
+- **COD (Coefficient of Dispersion)**: Measures variability in assessment ratios
+- **PRD (Price-Related Differential)**: Detects systematic bias related to property value
+- **PRB (Price-Related Bias)**: Alternative measure of vertical equity
+
+### Equity
+
+Equity ensures fair treatment across property types and value levels:
+
+- **Horizontal Equity**: Similar properties assessed similarly (measured by CHD)
+- **Vertical Equity**: Consistent assessment levels across price ranges (measured by PRD/PRB)
+
+## Statistical Measures
+
+### Coefficient of Variation (COV)
+
+Measures relative dispersion:
+
+```python
+import numpy as np
+
+def calc_cov(values):
+    mean = np.mean(values)
+    std = np.std(values)
+    return (std / mean) * 100
+```
+
+### R-Squared (R²)
+
+Measures goodness of fit:
+
+```python
+from openavmkit.utilities.stats import calc_mse_r2_adj_r2
+
+# Calculate R² and adjusted R²
+mse, r2, adj_r2 = calc_mse_r2_adj_r2(y_pred, y_true, n_features)
+
+print(f"R²: {r2:.3f}")
+print(f"Adjusted R²: {adj_r2:.3f}")
+```
+
+## Confidence Intervals
+
+OpenAVM Kit uses bootstrap methods to calculate confidence intervals for quality metrics:
+
+```python
+from openavmkit.utilities.stats import ConfidenceStat
+
+# ConfidenceStat provides value with confidence bounds
+class ConfidenceStat:
+    def __init__(self, value, confidence_interval, low, high):
+        self.value = value  # Point estimate
+        self.confidence_interval = confidence_interval  # e.g., 0.95
+        self.low = low      # Lower bound
+        self.high = high    # Upper bound
+```
+
+### Bootstrap Confidence Intervals
+
+Bootstrapping provides robust confidence intervals without assuming normal distributions:
+
+```python
+from openavmkit.utilities.stats import calc_ratio_stats_bootstrap
+
+# Calculate statistics with 95% confidence intervals
+results = calc_ratio_stats_bootstrap(
+    predictions,
+    ground_truth,
+    confidence_interval=0.95,
+    iterations=10000
+)
+
+cod = results["cod"]
+print(f"COD: {cod.value:.1f} [{cod.low:.1f}, {cod.high:.1f}]")
+```
+
+<Note>
+Bootstrap iterations should be at least 1,000 for stable confidence intervals. OpenAVM Kit defaults to 10,000 iterations for production use.
+</Note>
+
+## IAAO Standards
+
+The International Association of Assessing Officers (IAAO) provides quality benchmarks:
+
+| Metric | Excellent | Acceptable | Needs Improvement |
+|--------|-----------|------------|-------------------|
+| COD    | < 5.0     | 5.0 - 15.0 | > 15.0           |
+| PRD    | 0.98-1.03 | 0.95-1.05  | Outside range    |
+| PRB    | -0.05 to 0.05 | -0.10 to 0.10 | Outside range |
+| Median Ratio | 0.90-1.10 | 0.85-1.15 | Outside range |
+
+<Warning>
+COD standards vary by property type. Residential properties typically target COD < 10, while commercial properties may accept COD < 20.
+</Warning>
+
+## Trimming Outliers
+
+Ratio studies often trim extreme outliers to focus on typical properties:
+
+```python
+from openavmkit.utilities.stats import trim_outlier_ratios
+
+# Trim ratios outside the interquartile range
+trim_predictions, trim_ground_truth = trim_outlier_ratios(
+    predictions,
+    ground_truth,
+    max_trim=0.25  # Maximum 25% of data can be trimmed
+)
+```
+
+## Model Comparison
+
+Compare quality metrics across different models:
+
+```python
+from openavmkit.ratio_study import RatioStudy
+
+# Create ratio studies for multiple models
+models = {"XGBoost": xgb_preds, "LightGBM": lgb_preds, "CatBoost": cb_preds}
+max_trim = 0.25
+
+for name, preds in models.items():
+    rs = RatioStudy(preds, ground_truth, max_trim)
+    print(f"{name}:")
+    print(f"  COD: {rs.cod:.1f}")
+    print(f"  Median Ratio: {rs.median_ratio:.3f}")
+    print(f"  PRD: {rs.prd:.3f}")
+```
+
+## Quality Reports
+
+Generate comprehensive quality reports:
+
+```python
+from openavmkit.ratio_study import run_and_write_ratio_study_breakdowns
+
+# Generate ratio study reports with breakdowns
+run_and_write_ratio_study_breakdowns(settings)
+```
+
+Reports include:
+- Overall quality metrics
+- Breakdowns by property characteristics
+- Comparisons to assessor values
+- Confidence intervals
+- IAAO compliance assessment
+
+## Best Practices
+
+<Steps>
+  <Step title="Validate Data Quality">
+    Ensure sale prices are arms-length transactions and assessments are current
+  </Step>
+  <Step title="Calculate Multiple Metrics">
+    Use COD, PRD, and PRB together for comprehensive evaluation
+  </Step>
+  <Step title="Use Confidence Intervals">
+    Bootstrap methods provide robust uncertainty quantification
+  </Step>
+  <Step title="Segment Analysis">
+    Evaluate quality separately for different property types and value ranges
+  </Step>
+  <Step title="Track Over Time">
+    Monitor metrics across multiple assessment cycles
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Ratio Studies" icon="chart-line" href="/advanced/ratio-studies">
+    Deep dive into COD, PRD, and ratio study metrics
+  </Card>
+  <Card title="Equity Studies" icon="scale-balanced" href="/advanced/equity-studies">
+    Learn about horizontal and vertical equity analysis
+  </Card>
+</CardGroup>

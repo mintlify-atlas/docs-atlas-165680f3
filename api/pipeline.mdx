@@ -1,0 +1,596 @@
+---
+title: "Pipeline"
+description: "Public API functions for OpenAVM Kit notebook workflows"
+---
+
+The `pipeline` module contains every public function called from the notebooks in the OpenAVM Kit project. This is the primary interface for building automated valuation models.
+
+## Initialization
+
+### init_notebook()
+
+Initialize the notebook environment for a specific locality.
+
+```python
+from openavmkit import pipeline
+
+pipeline.init_notebook("us-nc-guilford")
+```
+
+<ParamField path="locality" type="str" required>
+  The locality slug (e.g., "us-nc-guilford")
+</ParamField>
+
+### load_settings()
+
+Load and return the settings dictionary for the locality.
+
+```python
+settings = pipeline.load_settings()
+```
+
+<ParamField path="settings_file" type="str" default="in/settings.json">
+  Path to the settings file
+</ParamField>
+
+<ParamField path="settings_object" type="dict" default="None">
+  Optional settings object to use instead of loading from a file
+</ParamField>
+
+<ParamField path="error" type="bool" default="True">
+  If True, raises an error if the settings file cannot be loaded
+</ParamField>
+
+<ParamField path="warning" type="bool" default="True">
+  If True, raises a warning if the settings file cannot be loaded
+</ParamField>
+
+<ResponseField name="settings" type="dict">
+  The fully resolved settings dictionary
+</ResponseField>
+
+## Data Loading & Processing
+
+### load_dataframes()
+
+Load dataframes based on the provided settings and return them in a dictionary.
+
+```python
+dataframes = pipeline.load_dataframes(settings, verbose=True)
+```
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints detailed logs during data loading
+</ParamField>
+
+<ResponseField name="dataframes" type="dict">
+  Dictionary mapping keys to loaded DataFrames
+</ResponseField>
+
+### process_dataframes()
+
+Process dataframes according to settings and return a SalesUniversePair.
+
+```python
+sup = pipeline.process_dataframes(dataframes, settings, verbose=True)
+```
+
+<ParamField path="dataframes" type="dict" required>
+  Dictionary of DataFrames
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary for data processing
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints detailed logs during processing
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  A SalesUniversePair object containing the processed sales and universe data
+</ResponseField>
+
+### tag_model_groups_sup()
+
+Tag model groups for a SalesUniversePair based on user-specified filters.
+
+```python
+sup = pipeline.tag_model_groups_sup(sup, settings, verbose=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration settings
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, enables verbose output
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Updated SalesUniversePair with tagged model groups
+</ResponseField>
+
+### process_sales()
+
+Process sales data within a SalesUniversePair by cleaning invalid sales and applying time adjustments.
+
+```python
+sup = pipeline.process_sales(sup, settings, write=True, verbose=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration settings
+</ParamField>
+
+<ParamField path="write" type="bool" default="False">
+  Whether to write out data during processing
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints verbose output during processing
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Updated SalesUniversePair with processed sales data
+</ResponseField>
+
+## Enrichment Functions
+
+### enrich_sup_spatial_lag()
+
+Enrich the sales and universe DataFrames with spatial lag features.
+
+```python
+sup = pipeline.enrich_sup_spatial_lag(sup, settings, verbose=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  SalesUniversePair containing sales and universe DataFrames
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints progress information
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Enriched SalesUniversePair with spatial lag features
+</ResponseField>
+
+### enrich_sup_streets()
+
+Enrich a GeoDataFrame with street network data.
+
+<Warning>
+This function can be VERY computationally and memory intensive for large datasets.
+</Warning>
+
+```python
+sup = pipeline.enrich_sup_streets(sup, settings, verbose=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  The data you want to enrich
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints verbose output during processing
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Enriched SalesUniversePair with street-related metrics
+</ResponseField>
+
+### fill_unknown_values_sup()
+
+Fill unknown values with default values as specified in settings.
+
+```python
+sup = pipeline.fill_unknown_values_sup(sup, settings)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  The SalesUniversePair containing sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  The settings dictionary containing configuration for filling unknown values
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  The updated SalesUniversePair with filled unknown values
+</ResponseField>
+
+## Sales Scrutiny & Clustering
+
+### run_sales_scrutiny()
+
+Run sales scrutiny analysis for each model group within a SalesUniversePair.
+
+```python
+sup = pipeline.run_sales_scrutiny(
+    sup, 
+    settings, 
+    drop_cluster_outliers=True,
+    drop_heuristic_outliers=True,
+    verbose=True
+)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration settings
+</ParamField>
+
+<ParamField path="drop_cluster_outliers" type="bool" default="False">
+  If True, drops invalid sales identified through cluster analysis
+</ParamField>
+
+<ParamField path="drop_heuristic_outliers" type="bool" default="True">
+  If True, drops invalid sales identified through heuristics
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, enables verbose logging
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Updated SalesUniversePair after sales scrutiny analysis
+</ResponseField>
+
+### mark_ss_ids_per_model_group_sup()
+
+Cluster parcels for a sales scrutiny study by assigning sales scrutiny IDs.
+
+```python
+sup = pipeline.mark_ss_ids_per_model_group_sup(sup, settings, verbose=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration settings
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints verbose output during processing
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Updated SalesUniversePair with marked sales scrutiny IDs
+</ResponseField>
+
+### mark_horizontal_equity_clusters_per_model_group_sup()
+
+Cluster parcels for a horizontal equity study by assigning horizontal equity cluster IDs.
+
+```python
+sup = pipeline.mark_horizontal_equity_clusters_per_model_group_sup(
+    sup,
+    settings,
+    verbose=True,
+    do_land_clusters=True,
+    do_impr_clusters=True
+)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration settings
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints verbose output
+</ParamField>
+
+<ParamField path="do_land_clusters" type="bool" default="True">
+  If True, enables land clustering
+</ParamField>
+
+<ParamField path="do_impr_clusters" type="bool" default="True">
+  If True, enables improvement clustering
+</ParamField>
+
+<ResponseField name="sup" type="SalesUniversePair">
+  Updated SalesUniversePair with horizontal equity clusters marked
+</ResponseField>
+
+## Modeling Functions
+
+### try_variables()
+
+Run tests on variables to figure out which might be the most predictive.
+
+```python
+pipeline.try_variables(sup, settings, verbose=True, plot=True, do_report=True)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Your data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints detailed logs
+</ParamField>
+
+<ParamField path="plot" type="bool" default="False">
+  If True, prints visual plots
+</ParamField>
+
+<ParamField path="do_report" type="bool" default="False">
+  If True, generates PDF reports
+</ParamField>
+
+### try_models()
+
+Try out predictive models on the given SalesUniversePair. Optimized for speed and iteration.
+
+```python
+pipeline.try_models(
+    sup,
+    settings,
+    save_params=True,
+    use_saved_params=True,
+    verbose=True,
+    run_main=True,
+    run_vacant=True,
+    run_hedonic=True,
+    run_ensemble=True,
+    do_shaps=False,
+    do_plots=False
+)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration settings
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="True">
+  Whether to save model parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Whether to use saved model parameters
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, enables verbose output
+</ParamField>
+
+<ParamField path="run_main" type="bool" default="True">
+  Flag to run main models
+</ParamField>
+
+<ParamField path="run_vacant" type="bool" default="True">
+  Flag to run vacant models
+</ParamField>
+
+<ParamField path="run_hedonic" type="bool" default="True">
+  Flag to run hedonic models
+</ParamField>
+
+<ParamField path="run_ensemble" type="bool" default="True">
+  Flag to run ensemble models
+</ParamField>
+
+<ParamField path="do_shaps" type="bool" default="False">
+  Flag to run SHAP analysis
+</ParamField>
+
+<ParamField path="do_plots" type="bool" default="False">
+  Flag to plot scatterplots
+</ParamField>
+
+## Checkpoint & Cloud Functions
+
+### from_checkpoint()
+
+Read cached data from a checkpoint file or generate it via a function.
+
+```python
+df = pipeline.from_checkpoint(
+    "out/checkpoints/data.parquet",
+    load_and_process_data,
+    {"settings": settings}
+)
+```
+
+<ParamField path="path" type="str" required>
+  Path to the checkpoint file
+</ParamField>
+
+<ParamField path="func" type="callable" required>
+  Function to run if the checkpoint is not available. Should return a DataFrame
+</ParamField>
+
+<ParamField path="params" type="dict" required>
+  Parameters to pass to `func` when generating the data
+</ParamField>
+
+<ResponseField name="df" type="pd.DataFrame">
+  The resulting DataFrame, loaded from the checkpoint or generated
+</ResponseField>
+
+### write_checkpoint()
+
+Write data to a checkpoint file.
+
+```python
+pipeline.write_checkpoint(data, "out/checkpoints/data.parquet")
+```
+
+<ParamField path="data" type="Any" required>
+  Data to be checkpointed
+</ParamField>
+
+<ParamField path="path" type="str" required>
+  File path for saving the checkpoint
+</ParamField>
+
+### delete_checkpoints()
+
+Delete all checkpoints that match the given prefix.
+
+```python
+pipeline.delete_checkpoints("out/checkpoints/")
+```
+
+<ParamField path="prefix" type="str" required>
+  The prefix used to identify checkpoints to delete
+</ParamField>
+
+### cloud_sync()
+
+Synchronize local files to cloud storage.
+
+```python
+pipeline.cloud_sync(
+    locality="us-nc-guilford",
+    verbose=True,
+    dry_run=False,
+    ignore_paths=["*.tmp"]
+)
+```
+
+<ParamField path="locality" type="str" required>
+  The locality identifier used to form remote paths
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints detailed log messages
+</ParamField>
+
+<ParamField path="dry_run" type="bool" default="False">
+  If True, simulates the sync without performing any changes
+</ParamField>
+
+<ParamField path="ignore_paths" type="list" default="None">
+  List of file paths or patterns to ignore during sync
+</ParamField>
+
+## Data Examination
+
+### examine_sup()
+
+Print examination details of the sales and universe data from a SalesUniversePair.
+
+```python
+pipeline.examine_sup(sup, settings)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Object containing 'sales' and 'universe' DataFrames
+</ParamField>
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+### examine_df()
+
+Print examination details of a DataFrame.
+
+```python
+pipeline.examine_df(df, settings)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  The data you wish to examine
+</ParamField>
+
+<ParamField path="s" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+## Output Functions
+
+### write_notebook_output_sup()
+
+Write notebook output to disk.
+
+```python
+pipeline.write_notebook_output_sup(
+    sup,
+    prefix="1-assemble",
+    parquet=True,
+    gpkg=False,
+    shp=False,
+    csv=False
+)
+```
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data
+</ParamField>
+
+<ParamField path="prefix" type="str" default="1-assemble">
+  File prefix for naming output files
+</ParamField>
+
+<ParamField path="parquet" type="bool" default="True">
+  Whether to write to parquet format
+</ParamField>
+
+<ParamField path="gpkg" type="bool" default="False">
+  Whether to write to gpkg format
+</ParamField>
+
+<ParamField path="shp" type="bool" default="False">
+  Whether to write to ESRI shapefile format
+</ParamField>
+
+<ParamField path="csv" type="bool" default="False">
+  Whether to write to CSV format
+</ParamField>
+
+### write_parquet()
+
+Write data to a parquet file.
+
+```python
+pipeline.write_parquet(df, "out/data.parquet")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Data to be written
+</ParamField>
+
+<ParamField path="path" type="str" required>
+  File path for saving the parquet
+</ParamField>

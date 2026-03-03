@@ -1,0 +1,192 @@
+---
+title: Vertical Equity
+description: Vertical equity analysis to detect price-related bias in assessments
+---
+
+The vertical equity module analyzes whether properties at different price levels are assessed fairly. It detects systematic over-assessment or under-assessment at different price tiers.
+
+## Classes
+
+### VerticalEquityStudy
+
+Perform vertical equity analysis and summarize the results.
+
+**Attributes:**
+- `rows` (int): Total number of rows in the input DataFrame
+- `confidence_interval` (float): The confidence interval (e.g. 0.95 for 95% confidence)
+- `prd` (ConfidenceStat): The price-related differential with confidence intervals
+- `prb` (ConfidenceStat): The price-related bias with confidence intervals
+- `quantiles` (pd.DataFrame): A DataFrame containing the median ratio with confidence intervals for all ten price quantile tiers
+- `grouped_quantiles` (pd.DataFrame): A DataFrame containing the median ratio with confidence intervals for location-grouped price quantile tiers
+
+#### `__init__`
+
+```python
+VerticalEquityStudy(
+    df_sales_in: pd.DataFrame,
+    field_sales: str,
+    field_prediction: str,
+    field_location: str,
+    confidence_interval: float = 0.95,
+    iterations: int = 10000,
+    seed: int = 777
+)
+```
+
+<ParamField path="df_sales_in" type="pd.DataFrame">
+  Input sales DataFrame
+</ParamField>
+
+<ParamField path="field_sales" type="str">
+  Column name for sale prices
+</ParamField>
+
+<ParamField path="field_prediction" type="str">
+  Column name for predicted/assessed values
+</ParamField>
+
+<ParamField path="field_location" type="str">
+  Column name for location grouping (e.g., neighborhood)
+</ParamField>
+
+<ParamField path="confidence_interval" type="float" default="0.95">
+  The confidence interval for bootstrap resampling (default 0.95 for 95% confidence)
+</ParamField>
+
+<ParamField path="iterations" type="int" default="10000">
+  Number of bootstrap iterations to perform
+</ParamField>
+
+<ParamField path="seed" type="int" default="777">
+  Random seed for reproducibility
+</ParamField>
+
+#### `summary()`
+
+Generate a summary DataFrame of vertical equity statistics.
+
+<ResponseField name="return" type="pd.DataFrame">
+  DataFrame containing PRD and PRB statistics with confidence intervals, statistical significance indicators, and IAAO standard compliance
+</ResponseField>
+
+The summary includes:
+- Point value for each statistic
+- Upper and lower confidence bounds
+- Statistical significance (whether confidence interval excludes neutral value)
+- IAAO recommended range compliance
+- IAAO passing range compliance
+
+#### `plot_quantiles()`
+
+Plot median ratios across price quantiles to visualize vertical equity.
+
+```python
+plot_quantiles(
+    ci_bounds: bool = False,
+    ylim = None,
+    grouped: bool = False
+)
+```
+
+<ParamField path="ci_bounds" type="bool" default="False">
+  If True, plots confidence interval bounds in addition to point estimates
+</ParamField>
+
+<ParamField path="ylim" default="None">
+  Y-axis limits. Can be:
+  - None: Uses default range (0.0 to 2.0)
+  - "min": Auto-scales to data range
+  - tuple of (min, max): Custom range
+</ParamField>
+
+<ParamField path="grouped" type="bool" default="False">
+  If True, uses location-grouped quantiles instead of direct price quantiles
+</ParamField>
+
+---
+
+## Metrics
+
+### Price-Related Differential (PRD)
+
+The PRD measures whether assessments vary systematically with property values.
+
+**Formula:**
+```
+PRD = (Mean Ratio) / (Weighted Mean Ratio)
+where Weighted Mean Ratio = Sum(Assessed Values) / Sum(Sale Prices)
+```
+
+**Interpretation:**
+- PRD = 1.00: No price-related differential (perfect vertical equity)
+- PRD > 1.00: Regressive (higher-value properties are under-assessed relative to lower-value properties)
+- PRD < 1.00: Progressive (lower-value properties are under-assessed relative to higher-value properties)
+
+**IAAO Standards:**
+- Recommended: 0.98 ≤ PRD ≤ 1.03
+- The same range applies for both recommended and passing
+
+**Statistical Significance:**
+A PRD is statistically significant if its 95% confidence interval does not include 1.00.
+
+---
+
+### Price-Related Bias (PRB)
+
+The PRB measures systematic bias in assessments related to sale price using a more sophisticated regression approach.
+
+**Formula:**
+```
+PRB = 2 × β₁ / (β₀ + β₁ × median_price)
+```
+
+where β₀ and β₁ are coefficients from the regression:
+```
+(Assessed - Sale Price) = β₀ + β₁ × [(Assessed + Sale Price) / 2]
+```
+
+**Interpretation:**
+- PRB = 0: No price-related bias (perfect vertical equity)
+- PRB > 0: Regressive bias (higher-value properties are under-assessed)
+- PRB < 0: Progressive bias (lower-value properties are under-assessed)
+- PRB is expressed as a decimal (e.g., 0.05 = 5% bias)
+
+**IAAO Standards:**
+- Recommended: -0.05 ≤ PRB ≤ 0.05
+- Acceptable/Passing: -0.10 ≤ PRB ≤ 0.10
+
+**Statistical Significance:**
+A PRB is statistically significant if its 95% confidence interval does not include 0.00.
+
+**Advantages over PRD:**
+- More sensitive to bias at the extremes of the price range
+- Less affected by outliers
+- Preferred by IAAO for detecting vertical inequity
+
+---
+
+### Quantile Analysis
+
+The vertical equity study divides sales into 10 quantiles (deciles) based on sale price and calculates the median assessment ratio for each quantile.
+
+**Two Approaches:**
+
+1. **Direct Quantiles** (`quantiles` attribute):
+   - Properties sorted directly by sale price
+   - Each property assigned to a price tier
+   - Shows raw price-related patterns
+
+2. **Grouped Quantiles** (`grouped_quantiles` attribute):
+   - Properties first grouped by location
+   - Each location assigned to a price tier based on its modal quantile
+   - All properties in that location inherit the tier
+   - Accounts for location-based price differences
+
+**Interpretation:**
+- Flat line across quantiles indicates good vertical equity
+- Upward slope indicates regressive assessment (higher-value properties over-assessed)
+- Downward slope indicates progressive assessment (lower-value properties over-assessed)
+- The `plot_quantiles()` method visualizes these patterns
+
+**Confidence Intervals:**
+Bootstrap confidence intervals are calculated for each quantile's median ratio, allowing assessment of statistical significance of differences between price tiers.

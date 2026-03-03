@@ -1,0 +1,208 @@
+---
+title: Data Filters
+description: Functions for filtering and selecting data in OpenAVM Kit
+---
+
+## resolve_filter
+
+```python
+resolve_filter(
+    df: pd.DataFrame, 
+    f: list, 
+    rename_map: dict = None
+) -> pd.Series
+```
+
+Resolve a filter list into a boolean Series for the DataFrame (which can be used for selection). This is the core filtering function that supports complex filter expressions with boolean operators.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame to filter.
+</ParamField>
+
+<ParamField path="f" type="list" required>
+  Filter list with operator and operands. Format: `[operator, field, value]` for basic operations, or `[boolean_op, filter1, filter2, ...]` for compound filters.
+</ParamField>
+
+<ParamField path="rename_map" type="dict">
+  Optional mapping of original to renamed columns.
+</ParamField>
+
+<ResponseField name="return" type="pd.Series">
+  Boolean Series corresponding to the filter, with True for rows that match the filter criteria.
+</ResponseField>
+
+### Supported Operators
+
+#### Basic Comparison Operators
+
+- `>`, `<`, `>=`, `<=`: Numeric comparisons
+- `==`, `!=`: Equality checks
+- `isin`, `notin`: Membership tests (value must be a list)
+- `contains`, `contains_case_insensitive`: String contains operations
+- `isempty`, `iszero`, `iszeroempty`: Null/empty checks
+
+#### Boolean Operators
+
+- `and`, `or`: Logical AND/OR
+- `nand`, `nor`: Negated AND/OR
+- `xor`, `xnor`: Exclusive OR and its negation
+- `not`: Logical NOT
+
+### Examples
+
+```python
+# Simple comparison
+filter_expensive = resolve_filter(df, [">", "sale_price", 500000])
+
+# Multiple conditions with AND
+filter_recent_sales = resolve_filter(df, [
+    "and",
+    [">", "sale_year", 2020],
+    ["==", "property_type", "str:SINGLE_FAMILY"]
+])
+
+# Using isin for multiple values
+filter_neighborhoods = resolve_filter(df, [
+    "isin", "neighborhood", ["Downtown", "Midtown", "Uptown"]
+])
+
+# Complex nested logic
+filter_complex = resolve_filter(df, [
+    "and",
+    ["or",
+        [">", "bldg_sqft", 2000],
+        [">", "land_sqft", 10000]
+    ],
+    ["!=", "zoning", "str:INDUSTRIAL"]
+])
+```
+
+---
+
+## select_filter
+
+```python
+select_filter(df: pd.DataFrame, f: list) -> pd.DataFrame
+```
+
+Select a subset of the DataFrame based on a list of filters. This is a convenience wrapper around `resolve_filter` that returns the filtered DataFrame directly.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame.
+</ParamField>
+
+<ParamField path="f" type="list" required>
+  Filter expressed as a list. Same format as `resolve_filter`.
+</ParamField>
+
+<ResponseField name="return" type="pd.DataFrame">
+  Filtered DataFrame containing only rows that match the filter criteria.
+</ResponseField>
+
+### Example
+
+```python
+# Select only recent high-value sales
+df_filtered = select_filter(df, [
+    "and",
+    [">", "sale_year", 2020],
+    [">", "sale_price", 300000]
+])
+```
+
+---
+
+## resolve_bool_filter
+
+```python
+resolve_bool_filter(df: pd.DataFrame, f: list) -> pd.Series
+```
+
+Resolve a list of filters using a boolean operator. Iterates through each filter in the list (after the operator) and combines their boolean indices using the specified boolean operator.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame.
+</ParamField>
+
+<ParamField path="f" type="list" required>
+  List where the first element is the boolean operator and the remaining elements are filter objects.
+</ParamField>
+
+<ResponseField name="return" type="pd.Series">
+  Boolean Series resulting from applying the boolean operator.
+</ResponseField>
+
+### Example
+
+```python
+# Combine multiple filters with OR
+result = resolve_bool_filter(df, [
+    "or",
+    ["==", "property_type", "str:CONDO"],
+    ["==", "property_type", "str:TOWNHOUSE"]
+])
+```
+
+---
+
+## resolve_not_filter
+
+```python
+resolve_not_filter(df: pd.DataFrame, f: list) -> pd.Series
+```
+
+Resolve a NOT filter. The first element of the filter list must be "not", followed by a filter list.
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame.
+</ParamField>
+
+<ParamField path="f" type="list" required>
+  Filter list starting with "not".
+</ParamField>
+
+<ResponseField name="return" type="pd.Series">
+  Boolean Series resulting from applying the NOT operator.
+</ResponseField>
+
+### Example
+
+```python
+# Select everything except vacant properties
+result = resolve_not_filter(df, [
+    "not",
+    ["==", "is_vacant", True]
+])
+```
+
+---
+
+## validate_filter
+
+```python
+validate_filter(f: list) -> bool
+```
+
+Validate a single filter list. Checks that the filter's operator is appropriate for the value type.
+
+<ParamField path="f" type="list" required>
+  Filter expressed as a list.
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if the filter is valid.
+</ResponseField>
+
+<ResponseField name="raises" type="ValueError">
+  If the value type does not match the operator requirements.
+</ResponseField>
+
+### Example
+
+```python
+# Valid filter
+validate_filter([">", "sale_price", 100000])  # Returns True
+
+# Invalid filter (string value for numeric operator)
+validate_filter([">", "sale_price", "expensive"])  # Raises ValueError
+```

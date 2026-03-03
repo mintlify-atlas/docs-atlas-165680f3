@@ -1,0 +1,402 @@
+---
+title: Modeling
+description: Building and evaluating machine learning models for property valuation
+---
+
+OpenAVM Kit provides a comprehensive modeling framework that supports multiple algorithms, automated hyperparameter tuning, and ensemble methods. This guide covers the complete modeling workflow from experimentation to finalization.
+
+## Modeling Workflow
+
+The modeling process consists of three phases:
+
+<Steps>
+
+### Experimentation
+Test variables and models quickly without saving results
+
+### Refinement
+Identify outliers and adjust model configuration
+
+### Finalization
+Train final models and generate predictions for all parcels
+
+</Steps>
+
+## Supported Algorithms
+
+OpenAVM Kit supports these model types:
+
+<CardGroup cols={2}>
+  <Card title="XGBoost" icon="tree">
+    Gradient boosting with tree-based learners. Excellent for tabular data with complex interactions.
+  </Card>
+  <Card title="LightGBM" icon="bolt">
+    Fast gradient boosting optimized for speed and memory efficiency.
+  </Card>
+  <Card title="CatBoost" icon="cat">
+    Gradient boosting with native categorical feature support.
+  </Card>
+  <Card title="GWR" icon="map">
+    Geographically Weighted Regression for spatial variation modeling.
+  </Card>
+</CardGroup>
+
+## Trying Models
+
+Use `try_models()` for rapid experimentation:
+
+```python 03-model.ipynb:244-256
+try_models(
+    sup=sales_univ_pair,
+    settings=load_settings(),
+    save_params=True,
+    verbose=verbose,
+    run_main=True,
+    run_vacant=False,
+    run_hedonic=False,
+    run_ensemble=True,
+    do_shaps=False,
+    do_plots=True
+)
+```
+
+### Parameters Explained
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Your cleaned data from the previous notebook
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="True">
+  Save hyperparameters for later use. Enables faster re-runs.
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Load previously saved hyperparameters instead of re-tuning
+</ParamField>
+
+<ParamField path="run_main" type="bool" default="True">
+  Run models predicting full market value
+</ParamField>
+
+<ParamField path="run_vacant" type="bool" default="True">
+  Run separate models for vacant land using only vacant sales
+</ParamField>
+
+<ParamField path="run_hedonic" type="bool" default="True">
+  Run hedonic models that predict land and improvement values separately
+</ParamField>
+
+<ParamField path="run_ensemble" type="bool" default="True">
+  Combine multiple models into weighted ensemble
+</ParamField>
+
+<ParamField path="do_shaps" type="bool" default="False">
+  Generate SHAP (SHapley Additive exPlanations) values for model interpretability
+</ParamField>
+
+<ParamField path="do_plots" type="bool" default="False">
+  Create scatter plots comparing predictions to actual sales
+</ParamField>
+
+## Model Types
+
+### Main Models
+
+Predict **full market value** for all property types:
+
+```python modeling.py
+def try_models(sup, settings, run_main=True, ...):
+    if run_main:
+        # Trains on all sales (improved + vacant)
+        # Predicts total property value
+```
+
+**Use case**: General property valuation
+
+### Vacant Models
+
+Predict **land value** using only vacant land sales:
+
+```python modeling.py
+def try_models(sup, settings, run_vacant=True, ...):
+    if run_vacant:
+        # Trains only on vacant sales
+        # Predicts land value
+```
+
+**Use case**: Land-only valuations, agricultural properties
+
+### Hedonic Models
+
+Separate **land value** from **improvement value**:
+
+```python modeling.py  
+def try_models(sup, settings, run_hedonic=True, ...):
+    if run_hedonic:
+        # Removes improvement characteristics
+        # Predicts land value as if vacant
+        # Derives improvement value by subtraction
+```
+
+**Use case**: Tax allocation, partial valuations
+
+<Note>
+Hedonic models help allocate value between land and improvements, which is required in many tax jurisdictions.
+</Note>
+
+## Configuration
+
+Configure models in your `settings.json`:
+
+```json settings.json
+{
+  "modeling": {
+    "model_groups": {
+      "single_family": {
+        "dep_var": "sale_price",
+        "models": {
+          "xgboost": {
+            "enabled": true,
+            "params": {
+              "max_depth": 6,
+              "learning_rate": 0.1,
+              "n_estimators": 100
+            }
+          },
+          "lightgbm": {
+            "enabled": true,
+            "params": {
+              "num_leaves": 31,
+              "learning_rate": 0.1
+            }
+          },
+          "catboost": {
+            "enabled": true,
+            "params": {
+              "depth": 6,
+              "learning_rate": 0.1
+            }
+          }
+        },
+        "ensemble": {
+          "enabled": true,
+          "method": "weighted_average"
+        }
+      }
+    }
+  }
+}
+```
+
+## Hyperparameter Tuning
+
+OpenAVM Kit automatically tunes hyperparameters using cross-validation:
+
+<Tabs>
+  <Tab title="XGBoost">
+    ```python tuning.py
+    def _tune_xgboost(ds: DataSplit, settings: dict):
+        param_grid = {
+            'max_depth': [3, 5, 7],
+            'learning_rate': [0.01, 0.1, 0.3],
+            'n_estimators': [50, 100, 200],
+            'subsample': [0.8, 1.0],
+            'colsample_bytree': [0.8, 1.0]
+        }
+        # Grid search with cross-validation
+    ```
+  </Tab>
+  
+  <Tab title="LightGBM">
+    ```python tuning.py
+    def _tune_lightgbm(ds: DataSplit, settings: dict):
+        param_grid = {
+            'num_leaves': [15, 31, 63],
+            'learning_rate': [0.01, 0.1],
+            'n_estimators': [50, 100, 200],
+            'min_child_samples': [20, 50, 100]
+        }
+    ```
+  </Tab>
+  
+  <Tab title="CatBoost">
+    ```python tuning.py
+    def _tune_catboost(ds: DataSplit, settings: dict):
+        param_grid = {
+            'depth': [4, 6, 8],
+            'learning_rate': [0.01, 0.1],
+            'iterations': [100, 200, 500],
+            'l2_leaf_reg': [1, 3, 5]
+        }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Set `save_params=True` and `use_saved_params=True` to avoid re-tuning on every run. This saves hours during development.
+</Tip>
+
+## Ensemble Models
+
+Combine multiple models for better accuracy:
+
+```python modeling.py
+def create_ensemble(models: list, weights: list = None):
+    """Weighted average of model predictions.
+    
+    Default weights based on test set performance.
+    """
+    if weights is None:
+        # Weight by inverse RMSE
+        weights = [1/model.rmse for model in models]
+    
+    predictions = sum(w * m.predict(X) for w, m in zip(weights, models))
+    return predictions / sum(weights)
+```
+
+**Benefits:**
+- Reduces overfitting
+- Smooths individual model quirks
+- Often outperforms single best model
+
+## Identifying Outliers
+
+After trying models, analyze prediction errors:
+
+```python 03-model.ipynb:278-281
+identify_outliers(
+    sup=sales_univ_pair,
+    settings=load_settings()
+)
+```
+
+This generates CSV files in `out/models/{model_group}/{model_type}/{model_name}/` with:
+
+- **`outliers.csv`**: Sales with prediction ratios outside 0.75-1.25 range
+- **`pred_sales.csv`**: All predictions on sales
+- **`pred_universe.csv`**: Predictions for all parcels
+
+**Review outliers to:**
+- Identify invalid sales that slipped through scrutiny
+- Discover missing variables
+- Understand model limitations
+
+## Finalizing Models
+
+Once satisfied with model performance, finalize to generate production predictions:
+
+```python 03-model.ipynb:301-309
+results = from_checkpoint("3-model-02-finalize-models", finalize_models,
+    {
+        "sup": sales_univ_pair,
+        "settings": load_settings(),
+        "save_params": True,
+        "use_saved_params": True,
+        "verbose": verbose
+    }
+)
+```
+
+### What `finalize_models()` Does
+
+```python pipeline.py
+def finalize_models(sup, settings, save_params=True, use_saved_params=True, verbose=False):
+    """Train final models and save all results.
+    
+    - Trains on full training set
+    - Generates predictions for all parcels
+    - Saves models, predictions, and performance metrics
+    - Creates assessment quality reports
+    """
+```
+
+**Outputs:**
+- Trained model objects (`.pkl` files)
+- Predictions for universe and sales
+- Performance statistics (COD, PRD, PRB)
+- SHAP values (if enabled)
+- Scatter plots and visualizations
+
+## Model Evaluation Metrics
+
+OpenAVM Kit calculates multiple performance metrics:
+
+<ResponseField name="COD" type="float">
+  **Coefficient of Dispersion**: Measures horizontal equity (similar properties valued similarly)
+  - Target: < 15% for residential, < 20% for other
+</ResponseField>
+
+<ResponseField name="PRD" type="float">
+  **Price-Related Differential**: Detects bias toward high or low values
+  - Target: 0.98 - 1.03
+</ResponseField>
+
+<ResponseField name="PRB" type="float">
+  **Price-Related Bias**: Regression-based vertical equity measure
+  - Target: -0.05 to 0.05
+</ResponseField>
+
+<ResponseField name="R²" type="float">
+  **R-squared**: Proportion of variance explained
+  - Higher is better (0.0 - 1.0)
+</ResponseField>
+
+<ResponseField name="RMSE" type="float">
+  **Root Mean Square Error**: Average prediction error magnitude
+  - Lower is better
+</ResponseField>
+
+## Output Files
+
+Finalized models produce:
+
+```
+out/models/
+└── {model_group}/
+    ├── main/
+    │   ├── xgboost/
+    │   │   ├── model.pkl
+    │   │   ├── pred_sales.csv
+    │   │   ├── pred_universe.csv
+    │   │   ├── metrics.json
+    │   │   └── shap_values.csv
+    │   ├── lightgbm/
+    │   └── ensemble/
+    ├── vacant/
+    └── hedonic_land/
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start simple">
+    Begin with a single model type on one model group before expanding to multiple algorithms and property types.
+  </Accordion>
+  
+  <Accordion title="Monitor training time">
+    Hyperparameter tuning can take hours for large datasets. Use `save_params=True` to avoid repeated tuning.
+  </Accordion>
+  
+  <Accordion title="Check for overfitting">
+    If training metrics are much better than test metrics, your model is overfitting. Reduce model complexity or add regularization.
+  </Accordion>
+  
+  <Accordion title="Validate spatially">
+    Load predictions in GIS software to check for spatial patterns in errors. Systematic geographic bias indicates missing location variables.
+  </Accordion>
+  
+  <Accordion title="Use ensembles">
+    Ensemble models typically outperform individual models and are more robust to data quirks.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Jupyter Notebooks" icon="book" href="/guides/jupyter-notebooks">
+    Learn the complete notebook workflow
+  </Card>
+  <Card title="Configuration Reference" icon="sliders" href="/api-reference/configuration">
+    Explore all modeling configuration options
+  </Card>
+</CardGroup>

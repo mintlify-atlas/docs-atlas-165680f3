@@ -1,0 +1,416 @@
+---
+title: Benchmark
+description: Model benchmarking and comparison tools for evaluating AVM performance
+---
+
+The benchmark module provides comprehensive tools for training, evaluating, and comparing multiple AVM models. It handles the complete modeling workflow from variable selection to ensemble prediction.
+
+## Classes
+
+### BenchmarkResults
+
+Container for benchmark results across multiple models.
+
+**Attributes:**
+- `df_time` (pd.DataFrame): Timing information for model execution
+- `df_stats_test` (pd.DataFrame): Statistics for the holdout test set
+- `df_stats_test_post_val` (pd.DataFrame): Statistics for post-valuation-date test set only
+- `df_stats_full` (pd.DataFrame): Statistics for the full universe
+- `test_empty` (bool): Whether test set contains no records
+- `full_empty` (bool): Whether full set contains no records
+- `test_post_val_empty` (bool): Whether post-valuation test set contains no records
+
+#### `__init__`
+
+```python
+BenchmarkResults(
+    df_time: pd.DataFrame,
+    df_stats_test: pd.DataFrame,
+    df_stats_test_post_val: pd.DataFrame,
+    df_stats_full: pd.DataFrame
+)
+```
+
+<ParamField path="df_time" type="pd.DataFrame">
+  DataFrame containing timing data for model execution
+</ParamField>
+
+<ParamField path="df_stats_test" type="pd.DataFrame">
+  DataFrame with test set statistics
+</ParamField>
+
+<ParamField path="df_stats_test_post_val" type="pd.DataFrame">
+  DataFrame with test set statistics (post-valuation-date only)
+</ParamField>
+
+<ParamField path="df_stats_full" type="pd.DataFrame">
+  DataFrame with full universe statistics
+</ParamField>
+
+#### `print()`
+
+Return a formatted string summarizing the benchmark results.
+
+<ResponseField name="return" type="str">
+  A formatted string including timings, test set stats, and universe set stats
+</ResponseField>
+
+---
+
+### MultiModelResults
+
+Container for results from multiple models along with their benchmark.
+
+**Attributes:**
+- `model_results` (dict[str, SingleModelResults]): Dictionary mapping model names to their results
+- `benchmark` (BenchmarkResults): Benchmark results computed from the model results
+- `df_univ_orig` (pd.DataFrame): Original universe DataFrame
+- `df_sales_orig` (pd.DataFrame): Original sales DataFrame
+
+#### `__init__`
+
+```python
+MultiModelResults(
+    model_results: dict[str, SingleModelResults],
+    benchmark: BenchmarkResults,
+    df_univ: pd.DataFrame,
+    df_sales: pd.DataFrame
+)
+```
+
+<ParamField path="model_results" type="dict[str, SingleModelResults]">
+  Dictionary of individual model results
+</ParamField>
+
+<ParamField path="benchmark" type="BenchmarkResults">
+  Benchmark results
+</ParamField>
+
+<ParamField path="df_univ" type="pd.DataFrame">
+  Universe DataFrame
+</ParamField>
+
+<ParamField path="df_sales" type="pd.DataFrame">
+  Sales DataFrame
+</ParamField>
+
+#### `add_model()`
+
+Add a new model's results and update the benchmark.
+
+```python
+add_model(model: str, results: SingleModelResults)
+```
+
+<ParamField path="model" type="str">
+  The model name
+</ParamField>
+
+<ParamField path="results" type="SingleModelResults">
+  The results for the given model
+</ParamField>
+
+---
+
+## Functions
+
+### try_variables
+
+Experiment with variables to determine which are most useful for modeling.
+
+```python
+try_variables(
+    sup: SalesUniversePair,
+    settings: dict,
+    verbose: bool = False,
+    plot: bool = False,
+    do_report: bool = False
+)
+```
+
+<ParamField path="sup" type="SalesUniversePair">
+  The SalesUniversePair containing sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print verbose output
+</ParamField>
+
+<ParamField path="plot" type="bool" default="False">
+  Whether to generate plots
+</ParamField>
+
+<ParamField path="do_report" type="bool" default="False">
+  Whether to generate a PDF report
+</ParamField>
+
+---
+
+### get_variable_recommendations
+
+Determine which variables are most likely to be meaningful in a model.
+
+This function examines sales and universe data, applies feature selection via correlations, elastic net regularization, R², p-values, t-values, and VIF, and produces a set of recommended variables along with a written report.
+
+```python
+get_variable_recommendations(
+    df_sales: pd.DataFrame,
+    df_universe: pd.DataFrame,
+    vacant_only: bool,
+    settings: dict,
+    model_group: str,
+    variables_to_use: list[str] | None = None,
+    tests_to_run: list[str] | None = None,
+    do_cross: bool = True,
+    do_report: bool = False,
+    do_plots: bool = False,
+    verbose: bool = False,
+    t: TimingData = None
+) -> dict
+```
+
+<ParamField path="df_sales" type="pd.DataFrame">
+  The sales data
+</ParamField>
+
+<ParamField path="df_universe" type="pd.DataFrame">
+  The parcel universe data
+</ParamField>
+
+<ParamField path="vacant_only" type="bool">
+  Whether to consider only vacant sales
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  The settings dictionary
+</ParamField>
+
+<ParamField path="model_group" type="str">
+  The model group to consider
+</ParamField>
+
+<ParamField path="variables_to_use" type="list[str] | None" default="None">
+  A list of variables to use for feature selection. If None, variables are pulled from modeling section
+</ParamField>
+
+<ParamField path="tests_to_run" type="list[str] | None" default="None">
+  A list of tests to run. If None, all tests are run. Legal values are "corr", "r2", "p_value", "t_value", "enr", and "vif"
+</ParamField>
+
+<ParamField path="do_cross" type="bool" default="True">
+  Whether to perform cross-validation
+</ParamField>
+
+<ParamField path="do_report" type="bool" default="False">
+  If True, generates a report of the variable selection process
+</ParamField>
+
+<ParamField path="do_plots" type="bool" default="False">
+  If True, prints correlation plots
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints additional debugging information
+</ParamField>
+
+<ParamField path="t" type="TimingData" default="None">
+  TimingData object
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  A dictionary with keys:
+  - `"variables"`: the best variables list
+  - `"report"`: the generated report
+  - `"df_results"`: DataFrame with detailed results
+</ResponseField>
+
+---
+
+### run_models
+
+Runs predictive models on the given SalesUniversePair.
+
+This function takes detailed instructions from the provided settings dictionary and handles all the internal details like splitting the data, training the models, and saving the results. It performs basic statistic analysis on each model, and optionally combines results into an ensemble model.
+
+```python
+run_models(
+    sup: SalesUniversePair,
+    settings: dict,
+    save_params: bool = False,
+    use_saved_params: bool = True,
+    save_results: bool = False,
+    verbose: bool = False,
+    run_main: bool = True,
+    run_vacant: bool = True,
+    run_hedonic: bool = True,
+    run_ensemble: bool = True,
+    do_shaps: bool = False,
+    do_plots: bool = False
+)
+```
+
+<ParamField path="sup" type="SalesUniversePair">
+  Sales and universe data
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  The settings dictionary
+</ParamField>
+
+<ParamField path="save_params" type="bool" default="False">
+  Whether to save model parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool" default="True">
+  Whether to use saved model parameters
+</ParamField>
+
+<ParamField path="save_results" type="bool" default="False">
+  Whether to save model results
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints additional information
+</ParamField>
+
+<ParamField path="run_main" type="bool" default="True">
+  Whether to run main (non-vacant) models
+</ParamField>
+
+<ParamField path="run_vacant" type="bool" default="True">
+  Whether to run vacant models
+</ParamField>
+
+<ParamField path="run_hedonic" type="bool" default="True">
+  Whether to run hedonic models
+</ParamField>
+
+<ParamField path="run_ensemble" type="bool" default="True">
+  Whether to run ensemble models
+</ParamField>
+
+<ParamField path="do_shaps" type="bool" default="False">
+  Whether to compute SHAP values
+</ParamField>
+
+<ParamField path="do_plots" type="bool" default="False">
+  Whether to plot scatterplots
+</ParamField>
+
+<ResponseField name="return" type="MultiModelResults">
+  The MultiModelResults containing all model results and benchmarks
+</ResponseField>
+
+---
+
+### run_one_model
+
+Run a single model based on provided parameters and return its results.
+
+```python
+run_one_model(
+    df_sales: pd.DataFrame,
+    df_universe: pd.DataFrame,
+    vacant_only: bool,
+    model_group: str,
+    model_name: str,
+    model_entries: dict,
+    settings: dict,
+    dep_var: str,
+    dep_var_test: str,
+    best_variables: list[str],
+    fields_cat: list[str],
+    outpath: str,
+    save_params: bool,
+    use_saved_params: bool,
+    save_results: bool,
+    verbose: bool = False,
+    hedonic: bool = False,
+    test_keys: list[str] | None = None,
+    train_keys: list[str] | None = None
+) -> SingleModelResults | None
+```
+
+<ParamField path="df_sales" type="pd.DataFrame">
+  Sales DataFrame
+</ParamField>
+
+<ParamField path="df_universe" type="pd.DataFrame">
+  Universe DataFrame
+</ParamField>
+
+<ParamField path="vacant_only" type="bool">
+  Whether to use only vacant sales
+</ParamField>
+
+<ParamField path="model_group" type="str">
+  Model group identifier
+</ParamField>
+
+<ParamField path="model_name" type="str">
+  Model's unique identifier
+</ParamField>
+
+<ParamField path="model_entries" type="dict">
+  Dictionary of model configuration entries
+</ParamField>
+
+<ParamField path="settings" type="dict">
+  Settings dictionary
+</ParamField>
+
+<ParamField path="dep_var" type="str">
+  Dependent variable for training
+</ParamField>
+
+<ParamField path="dep_var_test" type="str">
+  Dependent variable for testing
+</ParamField>
+
+<ParamField path="best_variables" type="list[str]">
+  List of best variables selected
+</ParamField>
+
+<ParamField path="fields_cat" type="list[str]">
+  List of categorical fields
+</ParamField>
+
+<ParamField path="outpath" type="str">
+  Output path for saving results
+</ParamField>
+
+<ParamField path="save_params" type="bool">
+  Whether to save parameters
+</ParamField>
+
+<ParamField path="use_saved_params" type="bool">
+  Whether to use saved parameters
+</ParamField>
+
+<ParamField path="save_results" type="bool">
+  Whether to save results
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, prints additional information
+</ParamField>
+
+<ParamField path="hedonic" type="bool" default="False">
+  Whether to use hedonic pricing
+</ParamField>
+
+<ParamField path="test_keys" type="list[str] | None" default="None">
+  Optional list of test keys (will be read from disk if not provided)
+</ParamField>
+
+<ParamField path="train_keys" type="list[str] | None" default="None">
+  Optional list of training keys (will be read from disk if not provided)
+</ParamField>
+
+<ResponseField name="return" type="SingleModelResults | None">
+  SingleModelResults if successful, else None
+</ResponseField>

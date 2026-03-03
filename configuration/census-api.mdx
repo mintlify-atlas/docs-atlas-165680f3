@@ -1,0 +1,347 @@
+---
+title: Census API Configuration
+description: Configure Census API access to enrich your property data with demographic and socioeconomic information
+---
+
+## Overview
+
+OpenAVM Kit can enrich your property data with demographic information from the U.S. Census Bureau using the Census API. This adds valuable context like median income, population density, and other block group-level statistics to your dataset.
+
+## Why Use Census Enrichment?
+
+Census data provides important neighborhood context for property valuation:
+
+- **Demographic characteristics** - Population, age distribution, household composition
+- **Economic indicators** - Median income, employment rates, poverty levels  
+- **Housing statistics** - Occupancy rates, housing values, rent levels
+- **Geographic context** - Block group and tract-level aggregations
+
+This data is automatically joined to your parcels using spatial relationships, adding valuable features for your models.
+
+## Getting a Census API Key
+
+The Census API requires a free API key.
+
+### Sign Up for an API Key
+
+1. Visit the Census API Key Signup page: [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html)
+2. Fill out the registration form with your information
+3. Agree to the Census Bureau's Terms of Service
+4. Submit the form
+5. Check your email for the API key (usually arrives within minutes)
+
+<Note>
+The Census API key is free and has generous rate limits for most use cases. Keep your key secure but note that it's less sensitive than authentication tokens for other services.
+</Note>
+
+## Configuration
+
+### Add API Key to .env File
+
+Store your Census API key in the `.env` file located in the `notebooks/` directory:
+
+```bash
+# Census API Configuration
+CENSUS_API_KEY=your_api_key_here
+```
+
+<Warning>
+**Keep Credentials Secure**
+
+Never commit your `.env` file to version control. The file is already in `.gitignore`, but always verify it's not being tracked.
+</Warning>
+
+### Enable Census Enrichment
+
+Add Census configuration to your locality's `settings.json`:
+
+```json
+{
+  "process": {
+    "enrich": {
+      "census": {
+        "enabled": true,
+        "year": 2022,
+        "fips": "24510",
+        "fields": [
+          "median_income",
+          "total_pop"
+        ]
+      }
+    }
+  }
+}
+```
+
+## Configuration Options
+
+<ParamField path="process.enrich.census.enabled" type="boolean" default="false" required>
+  Set to `true` to enable Census data enrichment
+</ParamField>
+
+<ParamField path="process.enrich.census.year" type="number" default="2022">
+  The Census year to query. Use the most recent available year for current data.
+  
+  **Common years:**
+  - `2020` - Decennial Census
+  - `2022` - American Community Survey (ACS) 5-year estimates
+  - `2021` - American Community Survey (ACS) 5-year estimates
+</ParamField>
+
+<ParamField path="process.enrich.census.fips" type="string" required>
+  The 5-digit FIPS code identifying your locality (state + county code)
+  
+  **Format:** `SSCCC` where:
+  - `SS` = 2-digit state code
+  - `CCC` = 3-digit county code
+  
+  **Examples:**
+  - `48453` - Travis County, Texas (state 48, county 453)
+  - `24510` - Baltimore City, Maryland (state 24, county 510)
+  - `06037` - Los Angeles County, California (state 06, county 037)
+  
+  Find your FIPS code at [census.gov/library/reference/code-lists/fips-county-codes.html](https://www.census.gov/library/reference/code-lists/ansi.html)
+</ParamField>
+
+<ParamField path="process.enrich.census.fields" type="array" required>
+  List of Census variables to include in your dataset
+  
+  **Common fields:**
+  - `median_income` - Median household income
+  - `total_pop` - Total population
+  - `median_age` - Median age
+  - `median_home_value` - Median home value
+  - `pct_owner_occupied` - Percentage of owner-occupied housing units
+  - `pct_renter_occupied` - Percentage of renter-occupied housing units
+  - `unemployment_rate` - Unemployment rate
+</ParamField>
+
+## Example Configurations
+
+<CodeGroup>
+```json Basic Setup
+{
+  "process": {
+    "enrich": {
+      "census": {
+        "enabled": true,
+        "year": 2022,
+        "fips": "48453",
+        "fields": [
+          "median_income",
+          "total_pop"
+        ]
+      }
+    }
+  }
+}
+```
+
+```json Comprehensive Demographics
+{
+  "process": {
+    "enrich": {
+      "census": {
+        "enabled": true,
+        "year": 2022,
+        "fips": "06037",
+        "fields": [
+          "median_income",
+          "total_pop",
+          "median_age",
+          "median_home_value",
+          "pct_owner_occupied",
+          "pct_renter_occupied",
+          "unemployment_rate",
+          "pct_bachelor_degree",
+          "avg_household_size"
+        ]
+      }
+    }
+  }
+}
+```
+
+```json Multiple Counties
+{
+  "process": {
+    "enrich": {
+      "census": {
+        "enabled": true,
+        "year": 2021,
+        "fips": "24510",
+        "fields": [
+          "median_income",
+          "total_pop",
+          "median_home_value"
+        ]
+      }
+    }
+  }
+}
+```
+</CodeGroup>
+
+## How It Works
+
+### Spatial Join Process
+
+1. **Download Census Data** - The library queries the Census API for your specified fields at the block group level
+2. **Match Geography** - Census block groups are spatially joined to your parcels based on location
+3. **Add Fields** - Census variables are added as new columns to your parcel dataset
+4. **Use in Models** - The enriched fields are available for feature engineering and modeling
+
+### Data Granularity
+
+Census enrichment uses **block group** level data, which provides a good balance between:
+- **Granularity** - Small enough to capture neighborhood variation
+- **Privacy** - Large enough to protect individual privacy
+- **Stability** - Sufficient sample sizes for reliable estimates
+
+Block groups typically contain 600-3,000 people.
+
+## Using Census Data in Code
+
+The Census enrichment happens automatically during the data processing pipeline:
+
+```python
+from openavmkit.pipeline import run_pipeline
+
+# Run the full pipeline with Census enrichment enabled
+run_pipeline(
+    locality="us-tx-travis",
+    settings_file="in/settings.json"
+)
+
+# The output dataset will include Census fields
+```
+
+You can also use the Census utilities directly:
+
+```python
+from openavmkit.utilities.census import enrich_with_census
+import geopandas as gpd
+
+# Load your parcel data
+parcels = gpd.read_file("parcels.geojson")
+
+# Enrich with Census data
+enriched = enrich_with_census(
+    gdf=parcels,
+    year=2022,
+    fips="48453",
+    fields=["median_income", "total_pop"]
+)
+```
+
+## Available Census Variables
+
+The Census API provides hundreds of variables. Here are some commonly used ones:
+
+### Economic Variables
+
+- `median_income` - Median household income
+- `per_capita_income` - Per capita income
+- `poverty_rate` - Percentage below poverty line
+- `unemployment_rate` - Unemployment rate
+- `median_earnings` - Median earnings for workers
+
+### Demographic Variables
+
+- `total_pop` - Total population
+- `median_age` - Median age
+- `avg_household_size` - Average household size
+- `pct_male` - Percentage male
+- `pct_female` - Percentage female
+
+### Housing Variables
+
+- `median_home_value` - Median home value
+- `median_rent` - Median gross rent
+- `pct_owner_occupied` - Percentage owner-occupied units
+- `pct_renter_occupied` - Percentage renter-occupied units
+- `vacancy_rate` - Housing vacancy rate
+
+### Education Variables
+
+- `pct_high_school` - Percentage with high school diploma
+- `pct_bachelor_degree` - Percentage with bachelor's degree
+- `pct_graduate_degree` - Percentage with graduate degree
+
+<Tip>
+**Finding More Variables**
+
+Explore the full Census API variable list at [api.census.gov/data.html](https://api.census.gov/data.html). Look for the American Community Survey (ACS) datasets for the most comprehensive economic and demographic data.
+</Tip>
+
+## Troubleshooting
+
+### API Key Not Found
+
+**Error:** `Missing 'CENSUS_API_KEY' in environment`
+
+**Solution:** Verify your `.env` file contains the `CENSUS_API_KEY` variable and is located in the `notebooks/` directory.
+
+### Invalid FIPS Code
+
+**Error:** `Invalid FIPS code` or no data returned
+
+**Solution:** Double-check your 5-digit FIPS code. Ensure it matches your locality exactly. Use the Census Bureau's [FIPS code reference](https://www.census.gov/library/reference/code-lists/ansi.html).
+
+### Variable Not Found
+
+**Error:** `Census variable not found`
+
+**Solution:** The variable name may have changed between Census years. Check the Census API documentation for your selected year to verify variable names.
+
+### Rate Limiting
+
+**Error:** `API rate limit exceeded`
+
+**Solution:** The Census API has rate limits. If you're making many requests:
+- Add delays between requests
+- Cache results locally
+- Contact the Census Bureau for higher limits if needed
+
+## Best Practices
+
+<Tip>
+**Use Recent Data**
+
+Use the most recent Census year available (typically 2022 for ACS 5-year estimates) to ensure your demographic data is current.
+</Tip>
+
+<Tip>
+**Select Relevant Fields**
+
+Only include Census fields that are relevant to your analysis. This keeps your dataset manageable and reduces API calls.
+</Tip>
+
+<Tip>
+**Understand Block Groups**
+
+Remember that Census data is aggregated at the block group level. Multiple parcels in the same block group will have identical Census values.
+</Tip>
+
+<Warning>
+**Don't Over-Rely on Demographics**
+
+While Census data is valuable, property characteristics and location typically have stronger predictive power for valuation. Use Census data as supplementary context.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="OpenStreetMap" icon="map" href="/configuration/openstreetmap">
+    Add geographic features from OpenStreetMap
+  </Card>
+  <Card title="Settings Configuration" icon="gear" href="/configuration/settings">
+    Learn more about settings.json structure
+  </Card>
+  <Card title="Cloud Storage" icon="cloud" href="/configuration/cloud-storage">
+    Configure cloud storage for your data
+  </Card>
+  <Card title="Data Processing" icon="database" href="/guides/data-assembly">
+    Learn about the data processing pipeline
+  </Card>
+</CardGroup>

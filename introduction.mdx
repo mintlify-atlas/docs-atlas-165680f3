@@ -1,0 +1,117 @@
+---
+title: Introduction to OpenAVM Kit
+description: A Python library for real estate mass appraisal, featuring data cleaning, enrichment, modeling, and statistical evaluation tools
+---
+
+## Welcome to OpenAVM Kit
+
+OpenAVM Kit is a comprehensive Python library designed for real estate mass appraisal. It provides a complete toolkit for assessors, data scientists, and researchers to build, evaluate, and deploy automated valuation models (AVMs) with professional-grade accuracy.
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get up and running with OpenAVM Kit in minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install from PyPI or clone from GitHub
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/pipeline">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Jupyter Notebooks" icon="flask" href="/guides/jupyter-notebooks">
+    Browse notebooks and code examples
+  </Card>
+</CardGroup>
+
+## Key features
+
+OpenAVM Kit is built to handle the entire mass appraisal workflow:
+
+### Data processing and enrichment
+
+- **Data cleaning** - Filter invalid sales, handle missing values, and standardize formats
+- **Geographic enrichment** - Integrate with Census, OpenStreetMap, and Overture data sources
+- **Spatial analysis** - Calculate distances, identify clusters, and perform spatial inference
+- **Time adjustment** - Account for market trends and seasonal variations
+
+### Modeling capabilities
+
+- **Multiple regression analysis (MRA)** - Traditional linear models with spatial extensions
+- **Machine learning** - XGBoost, LightGBM, and CatBoost implementations
+- **Geographically weighted regression (GWR)** - Spatially-aware modeling
+- **Spatial lag models** - Incorporate neighborhood effects
+- **Land valuation** - Separate land and building value components
+
+### Statistical evaluation
+
+- **Ratio studies** - IAAO-standard assessment quality metrics
+- **Horizontal equity studies** - Ensure fair treatment across property types
+- **Vertical equity studies** - Analyze progressivity and regressivity
+- **Sales scrutiny** - Identify and handle outliers systematically
+
+### Production tools
+
+- **Cloud synchronization** - Azure, HuggingFace, and SFTP support
+- **Jupyter notebooks** - Interactive workflows for common tasks
+- **Report generation** - Automated PDF reports and visualizations
+- **Checkpoint system** - Cache intermediate results for faster iteration
+
+## Architecture
+
+OpenAVM Kit follows a modular design:
+
+```python
+import openavmkit
+from openavmkit.pipeline import init_notebook, load_settings
+from openavmkit.data import load_dataframe, process_data
+from openavmkit.modeling import fit_model
+from openavmkit.ratio_study import RatioStudy
+```
+
+The `pipeline` module provides high-level functions for notebook workflows, while specialized modules like `data`, `modeling`, and `ratio_study` offer fine-grained control.
+
+<Note>
+  OpenAVM Kit is tested on **Python 3.11** and **3.12**. Python 3.11.9 is recommended for maximum compatibility.
+</Note>
+
+## Who uses OpenAVM Kit?
+
+OpenAVM Kit is designed for:
+
+- **Assessment jurisdictions** building transparent, defensible valuation models
+- **Researchers** studying property taxation and housing economics
+- **Data scientists** developing custom AVM solutions
+- **Consultants** performing assessment quality audits
+
+## License and philosophy
+
+OpenAVM Kit is dual-licensed under AGPLv3 and a commercial license. The AGPL license allows free use for open-source projects, while the commercial license enables proprietary applications.
+
+See the [License Philosophy](https://github.com/larsiusprime/openavmkit/blob/master/LICENSE-PHILOSOPHY.md) for details on choosing the right license for your use case.
+
+## Getting help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/larsiusprime/openavmkit/issues">
+    Report bugs and request features
+  </Card>
+  <Card title="Discussions" icon="comments" href="https://github.com/larsiusprime/openavmkit/discussions">
+    Ask questions and share ideas
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<Steps>
+  <Step title="Install OpenAVM Kit">
+    Follow the [installation guide](/installation) to set up your environment
+  </Step>
+  <Step title="Complete the quick start">
+    Work through the [quick start tutorial](/quickstart) to build your first model
+  </Step>
+  <Step title="Explore the examples">
+    Browse the [example notebooks](/guides/jupyter-notebooks) for common workflows
+  </Step>
+  <Step title="Dive into the API">
+    Reference the [API documentation](/api/pipeline) for detailed usage
+  </Step>
+</Steps>

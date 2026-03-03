@@ -1,0 +1,209 @@
+---
+title: Creating a Locality
+description: Step-by-step guide to setting up a new locality in OpenAVM Kit
+---
+
+A "locality" in OpenAVM Kit represents a geographic area containing properties you want to analyze. This could be a city, county, neighborhood, or any other region. This guide walks you through creating and configuring a new locality.
+
+## Understanding Locality Structure
+
+Each locality follows a specific naming convention and directory structure that OpenAVM Kit relies on.
+
+### Naming Convention
+
+Locality names follow this format:
+
+```
+<country_code>-<state_or_province_code>-<locality_name>
+```
+
+<Note>
+All components should be lowercase with no spaces. Use underscores instead of dashes within the locality name itself.
+</Note>
+
+**Components:**
+- **Country code**: 2-letter [ISO 3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code (e.g., `us`, `no`)
+- **State/province code**: 2-letter [ISO 3166-2](https://en.wikipedia.org/wiki/ISO_3166-2) code (e.g., `tx`, `ca`, `ny`)
+- **Locality name**: Human-readable identifier (no dashes, use underscores)
+
+**Examples:**
+
+```
+us-nc-guilford       # Guilford County, North Carolina, USA
+us-tx-austin         # City of Austin, Texas, USA
+no-03-oslo           # City of Oslo, Norway
+no-50-orkdal         # Orkdal kommune, Norway
+us-ny-new_york_city  # New York City (underscores, not dashes)
+```
+
+## Step-by-Step Setup
+
+<Steps>
+
+### Create the locality directory
+
+Navigate to the `notebooks/pipeline/data/` directory and create your locality folder:
+
+```bash
+cd notebooks/pipeline/data/
+mkdir us-tx-imaginarycounty
+cd us-tx-imaginarycounty
+```
+
+### Create required subdirectories
+
+Every locality needs `in/` and `out/` directories:
+
+```bash
+mkdir in
+mkdir out
+```
+
+The final structure should look like:
+
+```
+notebooks/pipeline/data/
+└── us-tx-imaginarycounty/
+    ├── in/
+    │   └── settings.json
+    └── out/
+```
+
+### Create the settings file
+
+Create a `settings.json` file in the `in/` directory. Start with a minimal configuration:
+
+```json in/settings.json
+{}
+```
+
+<Note>
+A blank settings file with just `{}` is sufficient to get started. OpenAVM Kit will merge this with default settings.
+</Note>
+
+### Add your data files
+
+Place your raw data files in the `in/` directory:
+
+- **Required**: `geo_parcels` - A geospatial file (GeoJSON, Shapefile, GeoPackage) containing parcel geometries
+- **Optional**: Additional CSV, Parquet, or geospatial files with property characteristics and sales data
+
+**Example directory:**
+
+```
+in/
+├── settings.json
+├── parcels.gpkg           # Parcel geometries (required)
+├── property_data.csv      # Property characteristics
+└── sales.csv              # Sales transactions
+```
+
+### Configure cloud sync (optional)
+
+If you want to sync data with cloud storage, create a `cloud.json` file in your locality directory:
+
+<CodeGroup>
+
+```json Azure (Public)
+{
+  "type": "azure",
+  "azure_storage_container_url": "https://landeconomics.blob.core.windows.net/localities-public"
+}
+```
+
+```json HuggingFace
+{
+  "type": "huggingface",
+  "hf_repo_id": "your-username/your-repo",
+  "hf_revision": "main"
+}
+```
+
+```json SFTP
+{
+  "type": "sftp"
+}
+```
+
+</CodeGroup>
+
+<Warning>
+Never commit `cloud.json` or `.env` files to version control. They may contain sensitive credentials.
+</Warning>
+
+### Initialize in a notebook
+
+Open a Jupyter notebook and initialize your locality:
+
+```python
+from openavmkit.pipeline import init_notebook
+
+locality = "us-tx-imaginarycounty"
+init_notebook(locality)
+```
+
+This creates the necessary directory structure and prepares the environment.
+
+</Steps>
+
+## Configuring Settings
+
+As you develop your locality, you'll expand the `settings.json` file to configure:
+
+- **Data sources**: Define which files to load and how to process them
+- **Model groups**: Specify how to segment properties (e.g., single-family, commercial)
+- **Modeling parameters**: Configure algorithms, variables, and validation settings
+- **Valuation date**: Set the target date for valuations
+
+**Example settings structure:**
+
+```json settings.json
+{
+  "valuation_date": "2024-01-01",
+  "data": {
+    "load": {
+      "geo_parcels": {
+        "path": "parcels.gpkg",
+        "type": "geopackage"
+      },
+      "sales": {
+        "path": "sales.csv",
+        "type": "csv"
+      }
+    }
+  },
+  "modeling": {
+    "model_groups": {
+      "single_family": {
+        "filter": [
+          {"field": "bldg_type", "operator": "==", "value": "Single Family"}
+        ]
+      }
+    }
+  }
+}
+```
+
+## Switching Between Localities
+
+To work with multiple localities, simply change the locality variable at the top of your notebook:
+
+```python
+locality = "us-ca-san_francisco"  # Switch to different locality
+init_notebook(locality)
+```
+
+<Warning>
+When switching localities, clear and reset your notebook to avoid mixing data from different localities.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Assembly" icon="database" href="/guides/data-assembly">
+    Learn how to load and process your data files
+  </Card>
+  <Card title="Configuration Reference" icon="gear" href="/configuration/settings">
+    Explore all available settings options
+  </Card>
+</CardGroup>

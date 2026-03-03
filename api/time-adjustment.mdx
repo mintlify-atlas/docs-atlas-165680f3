@@ -1,0 +1,321 @@
+---
+title: Time Adjustment
+description: Time-series adjustment methods for real estate sales data
+---
+
+The time_adjustment module provides tools for adjusting historical sales data to current values by calculating time-based market trends and applying correction factors.
+
+## Core Functions
+
+### calculate_time_adjustment
+
+```python
+calculate_time_adjustment(
+    df_sales_in: pd.DataFrame,
+    settings: dict,
+    period: str = "M",
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+Calculate time adjustment multipliers from sales data.
+
+This function analyzes historical sales to compute median sale prices per area unit over time, interpolates missing periods, and returns daily time adjustment factors. The time resolution (monthly, quarterly, or yearly) is determined automatically based on data availability.
+
+<ParamField path="df_sales_in" type="pd.DataFrame" required>
+  Sales DataFrame with required fields:
+  - `sale_date`: Transaction date
+  - `sale_year`, `sale_month`, `sale_quarter`: Date components
+  - `sale_price`: Transaction price
+  - `bldg_area_finished_{unit}`: Finished building area
+  - `land_area_{unit}`: Land area
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary containing configuration for area units and modeling parameters
+</ParamField>
+
+<ParamField path="period" type="str" default="M">
+  Initial period type to attempt: `"M"` (monthly), `"Q"` (quarterly), or `"Y"` (yearly). Automatically adjusted if insufficient data.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable detailed progress output
+</ParamField>
+
+<ResponseField name="df_time" type="pd.DataFrame">
+  DataFrame with daily time adjustment values containing:
+  - `period`: Date (daily)
+  - `value`: Time adjustment multiplier
+</ResponseField>
+
+**Process:**
+1. Determines whether land or improvement drives value
+2. Calculates sale price per area unit
+3. Determines appropriate time resolution based on data density
+4. Computes median values by period (month/quarter/year)
+5. Interpolates missing periods linearly
+6. Flattens to daily resolution
+7. Normalizes to first period = 1.0
+
+---
+
+### apply_time_adjustment
+
+```python
+apply_time_adjustment(
+    df_sales_in: pd.DataFrame,
+    settings: dict,
+    period: str = "M",
+    write: bool = False,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+Calculate and apply time adjustment to bring all sales forward to present value.
+
+This is the main user-facing function that computes time trends and adds time-adjusted price columns to the sales data.
+
+<ParamField path="df_sales_in" type="pd.DataFrame" required>
+  Input sales DataFrame
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="period" type="str" default="M">
+  Period type for adjustment calculation
+</ParamField>
+
+<ParamField path="write" type="bool" default="False">
+  If True, write time adjustment schedule to CSV file
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Print verbose output during computation
+</ParamField>
+
+<ResponseField name="df_adjusted" type="pd.DataFrame">
+  Sales DataFrame with added columns:
+  - `sale_price_time_adj`: Time-adjusted sale price
+  - `sale_price_time_adj_per_impr_{unit}`: Adjusted price per improvement area
+  - `sale_price_time_adj_per_land_{unit}`: Adjusted price per land area
+</ResponseField>
+
+**Output Files** (if `write=True`):
+- `out/time_adjustment/{model_group}/time_adjustment_schedule.csv`
+
+---
+
+### apply_time_adjustment_per_model_group
+
+```python
+apply_time_adjustment_per_model_group(
+    df_sales_in: pd.DataFrame,
+    settings: dict,
+    model_group: str,
+    period: str = "M",
+    write: bool = False,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+Apply time adjustment for a specific model group.
+
+This function is called internally by `apply_time_adjustment` to process each model group separately, ensuring time trends are calculated independently for different property types.
+
+<ParamField path="df_sales_in" type="pd.DataFrame" required>
+  Sales data for a single model group
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="model_group" type="str" required>
+  Model group identifier
+</ParamField>
+
+<ParamField path="period" type="str" default="M">
+  Period type for adjustment
+</ParamField>
+
+<ParamField path="write" type="bool" default="False">
+  Write adjustment schedule to file
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Verbose output
+</ParamField>
+
+<ResponseField name="df_adjusted" type="pd.DataFrame">
+  Sales DataFrame with time-adjusted price columns
+</ResponseField>
+
+---
+
+### enrich_time_adjustment
+
+```python
+enrich_time_adjustment(
+    df_in: pd.DataFrame,
+    settings: dict,
+    write: bool = False,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+Enrich sales data by adding time-adjusted prices if not already present.
+
+This is a convenience wrapper that checks if time adjustment has already been applied and only calculates it if needed.
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input sales DataFrame
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary with optional `data.process.time_adjustment.period` configuration
+</ParamField>
+
+<ParamField path="write" type="bool" default="False">
+  Write time adjustment schedule to file
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Verbose output
+</ParamField>
+
+<ResponseField name="df_enriched" type="pd.DataFrame">
+  Sales DataFrame with `sale_price_time_adj` column added
+</ResponseField>
+
+---
+
+## Private Helper Functions
+
+### _determine_value_driver
+
+Analyzes sales data to determine whether land or improvements primarily drive value in the dataset.
+
+**Returns:** `"land"` or `"impr"`
+
+**Logic:**
+- Compares median sale price per area for land vs. improvements
+- If values are within 15% and ≥30% of sales are land, uses land
+- Otherwise uses improvements
+
+---
+
+### _determine_time_resolution
+
+Automatically selects appropriate time period (Month, Quarter, Year) based on data density.
+
+**Requirements:**
+- At least 5 sales per period
+- Monthly: tolerates up to 2 missing months per year
+- Quarterly: tolerates up to 1 missing quarter per year
+- Falls back to coarser resolution if insufficient data
+
+---
+
+### _crunch_time_adjustment
+
+Computes median sale price per area by time period, filters sparse periods, and interpolates missing values.
+
+**Process:**
+1. Groups sales by period
+2. Calculates median price per area
+3. Filters periods with < 5 sales
+4. Interpolates missing periods
+5. Normalizes to first period
+6. Applies 3-period moving average for monthly data
+
+---
+
+### _flatten_periods_to_days
+
+Converts period-level adjustments to daily resolution through interpolation.
+
+**Method:** Maps period medians to period midpoints, then linearly interpolates between midpoints to fill all days.
+
+---
+
+## Usage Example
+
+```python
+from openavmkit.time_adjustment import (
+    apply_time_adjustment,
+    enrich_time_adjustment,
+    calculate_time_adjustment
+)
+import pandas as pd
+
+# Example 1: Apply time adjustment to sales
+df_sales_adjusted = apply_time_adjustment(
+    df_sales,
+    settings,
+    period="M",
+    write=True,
+    verbose=True
+)
+
+print(df_sales_adjusted[['sale_date', 'sale_price', 'sale_price_time_adj']].head())
+
+# Example 2: Enrich with time adjustment (only if not present)
+df_enriched = enrich_time_adjustment(df_sales, settings, verbose=True)
+
+# Example 3: Calculate adjustment factors only
+df_time_factors = calculate_time_adjustment(
+    df_sales,
+    settings,
+    period="Q",  # quarterly
+    verbose=True
+)
+
+print(df_time_factors.head())
+# Output:
+#        period     value
+# 0  2020-01-01  1.000000
+# 1  2020-01-02  1.000123
+# 2  2020-01-03  1.000246
+```
+
+## Time Adjustment Methodology
+
+### Calculation Steps
+
+1. **Value Driver Detection**: Determines if land or improvements drive value
+2. **Period Selection**: Chooses time resolution (M/Q/Y) based on data density
+3. **Median Calculation**: Computes median $/area by period
+4. **Sparse Period Filtering**: Removes periods with < 5 sales
+5. **Interpolation**: Fills gaps with linear interpolation
+6. **Normalization**: Sets earliest period to 1.0
+7. **Smoothing**: Applies moving average for monthly data
+8. **Daily Mapping**: Converts to daily factors via period midpoints
+
+### Correction Factor Formula
+
+The correction factor brings historical sales forward to present value:
+
+```python
+correction_factor = 1 / (indexed_value / latest_indexed_value)
+sale_price_time_adj = sale_price * correction_factor
+```
+
+**Example:**
+- Jan 2020 indexed value: 1.00
+- Jun 2023 indexed value: 1.15
+- A sale from Jan 2020 at $500k would adjust to: $500k × (1.15/1.00) = $575k
+
+### Data Requirements
+
+**Minimum Requirements:**
+- At least 5 sales per time period
+- Valid `sale_date` and `sale_price` fields
+- Either `bldg_area_finished_{unit}` or `land_area_{unit}` > 0
+
+**Recommended:**
+- 10+ sales per month for monthly resolution
+- 30+ sales per quarter for quarterly resolution
+- Continuous time coverage (interpolation handles small gaps)

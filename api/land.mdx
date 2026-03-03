@@ -1,0 +1,168 @@
+---
+title: Land Value Modeling
+description: Functions for land value analysis using vacant and hedonic approaches
+---
+
+The land module provides comprehensive tools for land value modeling through vacant land analysis and hedonic approaches. These functions help separate land value from total property value using various statistical methods.
+
+## Core Functions
+
+### run_land_analysis
+
+```python
+run_land_analysis(
+    sup: SalesUniversePair,
+    settings: dict,
+    verbose: bool = False
+)
+```
+
+Execute land value analysis using vacant and hedonic land models to calculate land allocation ratios.
+
+This function processes sales data to determine what percentage of total property value should be attributed to land versus improvements. It runs both vacant land models and hedonic land models, compares their performance, and creates an optimized ensemble allocation.
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data pair containing property information
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Configuration dictionary with modeling instructions and parameters
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, print detailed progress information during analysis
+</ParamField>
+
+**Process:**
+1. Gathers predictions from main, hedonic, and vacant models
+2. Calculates land allocation ratios for each model
+3. Compares model performance using MAPE, R², and RMSE
+4. Optimizes ensemble by iteratively removing worst-performing models
+5. Saves final land analysis results to parquet
+
+---
+
+### convolve_land_analysis
+
+```python
+convolve_land_analysis(
+    sup: SalesUniversePair,
+    settings: dict,
+    verbose: bool = False
+)
+```
+
+Perform spatial convolution analysis on land values to evaluate model performance.
+
+This function analyzes land values from vacant land sales, comparing predicted land values per area unit against actual sale prices. It focuses on properties valid for land ratio studies and provides detailed performance metrics.
+
+<ParamField path="sup" type="SalesUniversePair" required>
+  Sales and universe data pair
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary with modeling configuration
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose output for debugging
+</ParamField>
+
+**Outputs:**
+- R² (OLS and y=x comparison)
+- Slope of regression line
+- Median sales ratio
+- Coefficient of Dispersion (COD)
+
+---
+
+### finalize_land_values
+
+```python
+finalize_land_values(
+    df_in: pd.DataFrame,
+    settings: dict,
+    verbose: bool = False
+) -> pd.DataFrame
+```
+
+Finalize land values by applying allocation ratios to model predictions.
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame containing properties to value
+</ParamField>
+
+<ParamField path="settings" type="dict" required>
+  Settings dictionary
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Print progress information
+</ParamField>
+
+<ResponseField name="df_out" type="pd.DataFrame">
+  GeoDataFrame with columns:
+  - `model_market_value`: Total predicted market value
+  - `model_land_value`: Predicted land value
+  - `model_impr_value`: Predicted improvement value
+  - `model_land_value_land_{unit}`: Land value per area unit
+  - `model_market_value_land_{unit}`: Market value per land area
+  - `model_market_value_impr_{unit}`: Market value per improvement area
+</ResponseField>
+
+**Process:**
+1. Loads cached land analysis results for each model group
+2. Applies land allocation ratios to calculate land values
+3. Derives improvement values (market value - land value)
+4. Applies quality control checks to land values
+5. Calculates per-area values
+6. Saves final predictions to parquet format
+
+---
+
+## Private Helper Functions
+
+### _run_land_analysis
+
+Internal function that performs the core land analysis workflow for a single model group. Handles model comparison, ensemble optimization, and result persistence.
+
+### _convolve_land_analysis
+
+Internal function for spatial land value analysis on vacant land sales.
+
+### _finalize_land_values
+
+Internal function that processes land allocation results and derives final land and improvement values with quality control.
+
+## Usage Example
+
+```python
+from openavmkit.land import run_land_analysis, finalize_land_values
+from openavmkit.data import SalesUniversePair
+
+# Run land analysis to calculate allocation ratios
+run_land_analysis(sup, settings, verbose=True)
+
+# Apply land values to all properties
+df_valued = finalize_land_values(df_universe, settings, verbose=True)
+
+print(df_valued[['key', 'model_market_value', 'model_land_value', 'model_impr_value']].head())
+```
+
+## Methodology
+
+### Vacant Land Approach
+Models vacant land sales directly to estimate land value per area unit, then applies these rates to improved properties.
+
+### Hedonic Land Approach
+Uses regression models to isolate land characteristics' contribution to total property value, deriving land allocation ratios statistically.
+
+### Ensemble Optimization
+The module automatically:
+- Compares multiple model approaches
+- Calculates performance metrics (MAPE, R², RMSE)
+- Iteratively removes poorest-performing models
+- Selects optimal ensemble based on:
+  - Minimizing negative allocations
+  - Minimizing allocations > 100%
+  - Maximizing prediction accuracy

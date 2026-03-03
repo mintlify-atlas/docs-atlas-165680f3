@@ -1,0 +1,532 @@
+---
+title: Land Valuation
+description: Vacant and hedonic land value modeling approaches for mass appraisal
+---
+
+## Overview
+
+Land valuation separates the value of land from improvements, essential for equitable taxation and market analysis. OpenAVM Kit provides sophisticated tools for both vacant land modeling and hedonic land extraction from improved sales.
+
+<Info>
+Proper land valuation ensures fair taxation and provides insight into site value independent of structures.
+</Info>
+
+## Why Separate Land Value?
+
+### Assessment Equity
+
+- **Property tax fairness**: Some jurisdictions tax land and improvements differently
+- **Teardown analysis**: Identify properties where land value exceeds total value
+- **Development potential**: Assess sites for highest and best use
+
+### Market Analysis
+
+- **Land value trends**: Track appreciation of site values over time
+- **Location premiums**: Quantify the value of location independent of structures
+- **Neighborhood analysis**: Compare land values across areas
+
+## Modeling Approaches
+
+OpenAVM Kit supports two complementary approaches:
+
+### 1. Vacant Land Models
+
+Direct modeling of vacant parcel sales:
+
+```python
+from openavmkit.data import get_vacant_sales
+
+# Filter to vacant land sales only
+df_vacant = get_vacant_sales(df_sales, settings)
+
+# Train model on vacant sales
+model.fit(X_vacant, y_vacant)
+```
+
+### 2. Hedonic Land Models
+
+Extract land value from improved property sales using building characteristics:
+
+```python
+# Model total value, then attribute portion to land
+# based on improvement characteristics
+model.fit(X_improved, y_improved)
+
+# Calculate land allocation
+land_allocation = predict_land_value(model, property_data)
+```
+
+## Configuration
+
+Define allocation models in settings:
+
+```yaml
+modeling:
+  instructions:
+    allocation:
+      vacant:
+        - xgboost
+        - lightgbm
+        - catboost
+      hedonic:
+        - xgboost
+        - lightgbm
+```
+
+**Vacant models**: Trained on vacant land sales only
+
+**Hedonic models**: Trained on improved sales, using improvement features to isolate land value
+
+## Land Analysis Workflow
+
+### Step 1: Run Land Analysis
+
+Calculate land allocations from all models:
+
+```python
+from openavmkit.land import run_land_analysis
+
+run_land_analysis(
+    sup=sales_universe_pair,
+    settings=settings,
+    verbose=True
+)
+```
+
+This:
+1. Loads main, vacant, and hedonic model predictions
+2. Calculates land allocation percentages
+3. Compares model performance
+4. Creates ensemble allocations
+
+### Step 2: Convolve Results
+
+Smooth and validate land values:
+
+```python
+from openavmkit.land import convolve_land_analysis
+
+convolve_land_analysis(
+    sup=sales_universe_pair,
+    settings=settings,
+    verbose=True
+)
+```
+
+This evaluates smoothed land values against vacant sales.
+
+### Step 3: Finalize Values
+
+Apply final land allocations to all properties:
+
+```python
+from openavmkit.land import finalize_land_values
+
+df_final = finalize_land_values(
+    df_in=df_universe,
+    settings=settings,
+    verbose=True
+)
+```
+
+This creates:
+- `model_land_value`: Land value in dollars
+- `model_impr_value`: Improvement value in dollars
+- `model_land_alloc`: Land allocation percentage (0-1)
+
+## Land Allocation Calculation
+
+For each property:
+
+```
+Land Allocation = Land Model Prediction / Main Model Prediction
+```
+
+Example:
+```python
+import pandas as pd
+
+# Main model predicts total value
+pred_main = 450_000  # Total property value
+
+# Vacant/hedonic model predicts land value
+pred_land = 180_000  # Land value
+
+# Calculate allocation
+alloc = pred_land / pred_main  # 0.40 = 40%
+
+print(f"Land accounts for {alloc:.1%} of total value")
+```
+
+### Multiple Model Ensemble
+
+Combine allocations from multiple models:
+
+```python
+import numpy as np
+
+# Allocations from different models
+allocations = {
+    "v_xgboost": 0.38,    # Vacant XGBoost
+    "v_lightgbm": 0.42,   # Vacant LightGBM
+    "h_xgboost": 0.35,    # Hedonic XGBoost
+    "h_lightgbm": 0.39    # Hedonic LightGBM
+}
+
+# Ensemble using median
+alloc_ensemble = np.median(list(allocations.values()))
+print(f"Ensemble allocation: {alloc_ensemble:.1%}")
+```
+
+<Note>
+OpenAVM Kit uses median to combine allocations, which is robust to outlier model predictions.
+</Note>
+
+## Model Comparison Metrics
+
+Evaluate land model performance:
+
+```python
+from sklearn.metrics import mean_absolute_percentage_error
+from openavmkit.utilities.stats import calc_mse_r2_adj_r2
+import numpy as np
+
+# Compare predicted land values to actual vacant sales
+mape = mean_absolute_percentage_error(y_true, y_pred)
+mse, r2, adj_r2 = calc_mse_r2_adj_r2(y_pred, y_true, n_features)
+rmse = np.sqrt(mse)
+
+print(f"R²: {r2:.3f}")
+print(f"RMSE: ${rmse:,.0f}")
+print(f"MAPE: {mape:.1%}")
+```
+
+### Allocation Quality Metrics
+
+Evaluate allocation reasonableness:
+
+```python
+# Check for problematic allocations
+df = pd.DataFrame({
+    "allocation": land_allocations
+})
+
+pct_negative = (df["allocation"] < 0).mean()
+pct_over_one = (df["allocation"] > 1).mean()
+median_alloc = df["allocation"].median()
+
+print(f"% negative: {pct_negative:.1%}")
+print(f"% over 100%: {pct_over_one:.1%}")
+print(f"Median allocation: {median_alloc:.1%}")
+```
+
+<Warning>
+Negative allocations or allocations exceeding 100% indicate model issues. OpenAVM Kit automatically clamps these to valid ranges.
+</Warning>
+
+## Ensemble Optimization
+
+OpenAVM Kit optimizes the ensemble by minimizing allocation errors:
+
+```python
+# From land.py implementation
+curr_ensemble = ["v_xgboost", "v_lightgbm", "h_xgboost", "h_lightgbm"]
+best_score = float("inf")
+
+# Calculate scores for each model
+scores = {}
+for alloc_name in model_allocations:
+    alloc = df[alloc_name]
+    pct_neg = (alloc < 0).sum() / len(alloc)
+    pct_over = (alloc > 1).sum() / len(alloc)
+    score = pct_neg + (pct_over * 2.0)  # Penalize over-100% more
+    scores[alloc_name] = score
+
+# Iteratively remove worst-performing models
+while len(curr_ensemble) > 0:
+    alloc_ensemble = df[curr_ensemble].median(axis=1)
+    pct_neg = (alloc_ensemble < 0).sum() / len(alloc_ensemble)
+    pct_over = (alloc_ensemble > 1).sum() / len(alloc_ensemble)
+    score = pct_neg + pct_over
+    
+    if score < best_score:
+        best_score = score
+        best_ensemble = curr_ensemble.copy()
+    
+    # Remove worst model and retry
+    worst_model = max(curr_ensemble, key=lambda x: scores[x])
+    curr_ensemble.remove(worst_model)
+```
+
+## Land Value Derivation
+
+Final land and improvement values:
+
+```python
+from openavmkit.utilities.data import div_series_z_safe
+
+# Apply allocation to market value
+df["model_land_value"] = df["model_market_value"] * df["model_land_alloc"]
+df["model_impr_value"] = df["model_market_value"] - df["model_land_value"]
+
+# Calculate per-unit values
+df["model_land_value_per_sqft"] = div_series_z_safe(
+    df["model_land_value"],
+    df["land_area_sf"]
+)
+
+df["model_impr_value_per_sqft"] = div_series_z_safe(
+    df["model_impr_value"],
+    df["bldg_area_finished_sf"]
+)
+```
+
+## Quality Control
+
+Validate land values for reasonableness:
+
+```python
+from openavmkit.quality_control import check_land_values
+
+# Apply sanity checks
+df = check_land_values(
+    df,
+    model_group="residential"
+)
+```
+
+This checks:
+- Land value doesn't exceed market value
+- Improvement value is non-negative
+- Allocations are within reasonable bounds
+
+### Corrective Actions
+
+```python
+# Clamp land value to market value
+df.loc[
+    df["model_land_value"] > df["model_market_value"],
+    "model_land_value"
+] = df["model_market_value"]
+
+# Ensure non-negative improvement value
+df["model_impr_value"] = df["model_market_value"] - df["model_land_value"]
+df.loc[df["model_impr_value"] < 0, "model_impr_value"] = 0
+
+# Recalculate allocation
+df["model_land_alloc"] = div_series_z_safe(
+    df["model_land_value"],
+    df["model_market_value"]
+)
+```
+
+## Visualization
+
+### Land Value Surface
+
+Map land values geographically:
+
+```python
+from openavmkit.modeling import plot_value_surface
+import geopandas as gpd
+
+# Create GeoDataFrame
+gdf = gpd.GeoDataFrame(df, geometry="geometry")
+
+# Plot land value per square foot
+plot_value_surface(
+    title="Land value per sqft",
+    values=gdf["model_land_value_per_sqft"],
+    gdf=gdf,
+    cmap="viridis",
+    norm="log"  # Log scale for wide value ranges
+)
+```
+
+### Allocation Distribution
+
+Histogram of land allocations:
+
+```python
+from openavmkit.utilities.plotting import plot_histogram_df
+
+plot_histogram_df(
+    df=df,
+    fields=["model_land_alloc"],
+    xlabel="% of value attributable to land",
+    ylabel="Number of parcels",
+    title="Land Allocation Distribution",
+    bins=100,
+    x_lim=(0.0, 1.0)
+)
+```
+
+## Correlation Analysis
+
+Identify features correlated with land value:
+
+```python
+from openavmkit.utilities.stats import calc_correlations
+
+# Features to analyze
+ind_vars = [
+    "land_area_sf",
+    "neighborhood",
+    "zoning",
+    "distance_to_downtown",
+    "school_district"
+]
+
+# Calculate correlations with land value
+X_corr = df_sales[["model_land_value"] + ind_vars]
+corrs = calc_correlations(X_corr)
+
+print("Initial correlations:")
+print(corrs["initial"])
+
+print("\nFinal correlations:")
+print(corrs["final"])
+```
+
+## Per-Area Metrics
+
+Calculate standardized land values:
+
+```python
+from openavmkit.utilities.settings import area_unit
+
+unit = area_unit(settings)  # 'sf' or 'sm'
+
+# Land value per square foot/meter
+df[f"model_land_value_{unit}"] = div_series_z_safe(
+    df["model_land_value"],
+    df[f"land_area_{unit}"]
+)
+
+# Market value per land area
+df[f"model_market_value_land_{unit}"] = div_series_z_safe(
+    df["model_market_value"],
+    df[f"land_area_{unit}"]
+)
+
+# Market value per building area
+df[f"model_market_value_impr_{unit}"] = div_series_z_safe(
+    df["model_market_value"],
+    df[f"bldg_area_finished_{unit}"]
+)
+```
+
+<Info>
+Per-area metrics enable comparison across properties of different sizes.
+</Info>
+
+## OLS Land Value Extraction
+
+Simple regression-based land value:
+
+```python
+from openavmkit.modeling import simple_ols
+
+# Regress sale price on land area
+results = simple_ols(
+    df=df_vacant_sales,
+    x_col="land_area_sf",
+    y_col="sale_price",
+    intercept=True
+)
+
+land_value_per_sf = results["slope"]
+print(f"Land value: ${land_value_per_sf:.2f} per sqft")
+print(f"R²: {results['r2']:.3f}")
+```
+
+## Advanced Topics
+
+### Teardown Analysis
+
+Identify properties where land exceeds total value:
+
+```python
+# Properties likely candidates for redevelopment
+df["is_teardown"] = df["model_land_value"] > df["model_market_value"]
+
+teardowns = df[df["is_teardown"]]
+print(f"Potential teardowns: {len(teardowns):,}")
+print(f"Average land allocation: {teardowns['model_land_alloc'].mean():.1%}")
+```
+
+### Land Residual Method
+
+Calculate land value by subtracting improvement value:
+
+```python
+# Estimate improvement value from cost approach
+df["impr_replacement_cost"] = (
+    df["bldg_area_finished_sf"] * cost_per_sf * df["depreciation_factor"]
+)
+
+# Land value is residual
+df["land_value_residual"] = (
+    df["model_market_value"] - df["impr_replacement_cost"]
+)
+```
+
+### Location-Based Land Values
+
+Use geographic features for land modeling:
+
+```python
+# Distance-based features
+df["dist_to_downtown"] = calculate_distance(df["geometry"], downtown_point)
+df["dist_to_transit"] = calculate_distance(df["geometry"], transit_stops)
+
+# Neighborhood characteristics
+df["walkability_score"] = get_walkability(df["latitude"], df["longitude"])
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Multiple Models">
+    Combine vacant and hedonic approaches for robust allocations
+  </Step>
+  <Step title="Validate Against Sales">
+    Compare predictions to actual vacant land sales
+  </Step>
+  <Step title="Apply Quality Controls">
+    Clamp allocations to valid ranges (0-100%)
+  </Step>
+  <Step title="Analyze Residuals">
+    Review properties with unusual allocations
+  </Step>
+  <Step title="Document Methodology">
+    Explain how land values were derived for appeals and audits
+  </Step>
+</Steps>
+
+## Output Files
+
+Land analysis generates:
+
+```
+out/models/{model_group}/
+  land_analysis.csv          # Tabular results
+  land_analysis.parquet      # Geospatial results
+  _cache/land_analysis.pickle # Intermediate data
+```
+
+Final predictions include:
+```
+out/models/predictions.parquet  # All properties with land values
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Equity Studies" icon="scale-balanced" href="/advanced/equity-studies">
+    Ensure fair land value assessments across properties
+  </Card>
+  <Card title="SHAP Analysis" icon="chart-network" href="/advanced/shap-analysis">
+    Understand which features drive land value predictions
+  </Card>
+</CardGroup>

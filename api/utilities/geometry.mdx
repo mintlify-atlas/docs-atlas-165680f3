@@ -1,0 +1,462 @@
+---
+title: "geometry"
+description: "Spatial operations, coordinate transformations, and GIS utilities"
+---
+
+The `geometry` module provides comprehensive spatial operations for working with geographic data, including coordinate reference system (CRS) management, distance calculations, spatial joins, geometry validation, and parcel analysis.
+
+## Coordinate Reference Systems
+
+### get_crs()
+
+Returns the appropriate CRS for a GeoDataFrame based on the specified projection type.
+
+```python
+from openavmkit.utilities.geometry import get_crs
+import geopandas as gpd
+
+crs = get_crs(gdf, projection_type='equal_area')
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  Input GeoDataFrame
+</ParamField>
+
+<ParamField path="projection_type" type="str" required>
+  Type of projection: `'latlon'`, `'equal_area'`, `'equal_distance'`, or `'conformal'`
+</ParamField>
+
+<ResponseField name="crs" type="pyproj.CRS">
+  Appropriate CRS for the specified projection type
+</ResponseField>
+
+---
+
+### get_crs_from_lat_lon()
+
+Return a Coordinate Reference System (CRS) suitable for the requested projection type at the given latitude/longitude location.
+
+```python
+from openavmkit.utilities.geometry import get_crs_from_lat_lon
+
+crs = get_crs_from_lat_lon(lat=40.7128, lon=-74.0060, projection_type='equal_area', units='m')
+```
+
+<ParamField path="lat" type="float" required>
+  Latitude
+</ParamField>
+
+<ParamField path="lon" type="float" required>
+  Longitude
+</ParamField>
+
+<ParamField path="projection_type" type="str" required>
+  The desired projection type: `'latlon'`, `'equal_area'`, `'equal_distance'`, or `'conformal'`
+</ParamField>
+
+<ParamField path="units" type="str" default="'m'">
+  The desired units: `'ft'` or `'m'`
+</ParamField>
+
+<ResponseField name="crs" type="pyproj.CRS">
+  The appropriate Coordinate Reference System
+</ResponseField>
+
+---
+
+## Distance Calculations
+
+### distance_km()
+
+Calculates the distance in kilometers between two latitude/longitude points.
+
+```python
+from openavmkit.utilities.geometry import distance_km
+
+dist = distance_km(lat1=40.7128, lon1=-74.0060, lat2=34.0522, lon2=-118.2437)
+```
+
+<ParamField path="lat1" type="float" required>
+  Latitude of the first point
+</ParamField>
+
+<ParamField path="lon1" type="float" required>
+  Longitude of the first point
+</ParamField>
+
+<ParamField path="lat2" type="float" required>
+  Latitude of the second point
+</ParamField>
+
+<ParamField path="lon2" type="float" required>
+  Longitude of the second point
+</ParamField>
+
+<ResponseField name="distance" type="float">
+  Distance in kilometers
+</ResponseField>
+
+---
+
+### offset_coordinate_km()
+
+Offset a lat/long coordinate by the designated number of kilometers.
+
+```python
+from openavmkit.utilities.geometry import offset_coordinate_km
+
+new_lat, new_lon = offset_coordinate_km(lat=40.7128, lon=-74.0060, lat_km=10, lon_km=5)
+```
+
+<ParamField path="lat" type="float" required>
+  Latitude
+</ParamField>
+
+<ParamField path="lon" type="float" required>
+  Longitude
+</ParamField>
+
+<ParamField path="lat_km" type="float" required>
+  Number of kilometers to offset latitude by
+</ParamField>
+
+<ParamField path="lon_km" type="float" required>
+  Number of kilometers to offset longitude by
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float]">
+  The offset latitude, longitude pair (in degrees)
+</ResponseField>
+
+---
+
+### offset_coordinate_m()
+
+Offset a lat/long coordinate by the designated number of meters.
+
+<ParamField path="lat" type="float" required>
+  Latitude
+</ParamField>
+
+<ParamField path="lon" type="float" required>
+  Longitude
+</ParamField>
+
+<ParamField path="lat_m" type="float" required>
+  Number of meters to offset latitude by
+</ParamField>
+
+<ParamField path="lon_m" type="float" required>
+  Number of meters to offset longitude by
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float]">
+  The offset latitude, longitude pair (in degrees)
+</ResponseField>
+
+---
+
+### offset_coordinate_feet()
+
+Offset a lat/long coordinate by the designated number of feet.
+
+<ParamField path="lat" type="float" required>
+  Latitude
+</ParamField>
+
+<ParamField path="lon" type="float" required>
+  Longitude
+</ParamField>
+
+<ParamField path="lat_feet" type="float" required>
+  Number of feet to offset latitude by
+</ParamField>
+
+<ParamField path="lon_feet" type="float" required>
+  Number of feet to offset longitude by
+</ParamField>
+
+<ResponseField name="return" type="tuple[float, float]">
+  The offset latitude, longitude pair (in degrees)
+</ResponseField>
+
+---
+
+## Geometry Creation
+
+### create_geo_circle()
+
+Creates a GeoDataFrame containing a circle centered at the specified latitude and longitude.
+
+```python
+from openavmkit.utilities.geometry import create_geo_circle
+from pyproj import CRS
+
+circle_gdf = create_geo_circle(
+    lat=40.7128,
+    lon=-74.0060,
+    crs=CRS.from_epsg(4326),
+    radius_km=5.0,
+    num_points=100
+)
+```
+
+<ParamField path="lat" type="float" required>
+  Latitude
+</ParamField>
+
+<ParamField path="lon" type="float" required>
+  Longitude
+</ParamField>
+
+<ParamField path="crs" type="pyproj.CRS" required>
+  Coordinate Reference System
+</ParamField>
+
+<ParamField path="radius_km" type="float" required>
+  Radius of the circle, in kilometers
+</ParamField>
+
+<ParamField path="num_points" type="int" default="100">
+  Number of points used to approximate the circle
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  A GeoDataFrame containing the circle
+</ResponseField>
+
+---
+
+### create_geo_rect()
+
+Creates a GeoDataFrame containing a rectangle centered at the specified latitude and longitude.
+
+```python
+from openavmkit.utilities.geometry import create_geo_rect
+
+rect_gdf = create_geo_rect(
+    lat=40.7128,
+    lon=-74.0060,
+    crs=CRS.from_epsg(4326),
+    width_km=10,
+    height_km=8,
+    anchor_point='center'
+)
+```
+
+<ParamField path="lat" type="float" required>
+  Latitude
+</ParamField>
+
+<ParamField path="lon" type="float" required>
+  Longitude
+</ParamField>
+
+<ParamField path="crs" type="pyproj.CRS" required>
+  Coordinate Reference System
+</ParamField>
+
+<ParamField path="width_km" type="float" required>
+  Width in kilometers
+</ParamField>
+
+<ParamField path="height_km" type="float" required>
+  Height in kilometers
+</ParamField>
+
+<ParamField path="anchor_point" type="str" default="'center'">
+  Anchor point of the rectangle: `'center'` or `'nw'` (northwest)
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  A GeoDataFrame containing the rectangle
+</ResponseField>
+
+---
+
+## Geometry Processing
+
+### ensure_geometries()
+
+Parse a DataFrame whose geometry column may be in various formats (Shapely, WKT, WKB, hex-encoded WKB).
+
+```python
+from openavmkit.utilities.geometry import ensure_geometries
+
+gdf = ensure_geometries(df, geom_col='geometry', crs='EPSG:4326')
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame
+</ParamField>
+
+<ParamField path="geom_col" type="str" default="'geometry'">
+  Name of the geometry column
+</ParamField>
+
+<ParamField path="crs" type="pyproj.CRS" default="None">
+  Coordinate Reference System
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  A brand-new GeoDataFrame with a clean geometry column
+</ResponseField>
+
+---
+
+### clean_geometry()
+
+Preprocess a GeoDataFrame by diagnosing and fixing common geometry issues.
+
+```python
+from openavmkit.utilities.geometry import clean_geometry
+
+cleaned_gdf = clean_geometry(
+    gdf,
+    ensure_polygon=True,
+    target_crs='EPSG:4326'
+)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  The input GeoDataFrame with geometries
+</ParamField>
+
+<ParamField path="ensure_polygon" type="bool" default="True">
+  If True, removes non-polygon geometries
+</ParamField>
+
+<ParamField path="target_crs" type="str or int" default="None">
+  If specified, ensures the GeoDataFrame is in this CRS
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  A cleaned and fixed GeoDataFrame
+</ResponseField>
+
+---
+
+## Spatial Joins
+
+### geolocate_point_to_polygon()
+
+Assign each point (latitude/longitude) in a DataFrame to a containing polygon ID.
+
+```python
+from openavmkit.utilities.geometry import geolocate_point_to_polygon
+
+df_matched = geolocate_point_to_polygon(
+    gdf=parcels_gdf,
+    df_in=sales_df,
+    lat_field='latitude',
+    lon_field='longitude',
+    parcel_id_field='parcel_id'
+)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  GeoDataFrame of polygon geometries (must include a geometry column and the parcel ID field)
+</ParamField>
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  Input DataFrame with at least latitude and longitude columns
+</ParamField>
+
+<ParamField path="lat_field" type="str" required>
+  Name of the column in df_in containing latitude values
+</ParamField>
+
+<ParamField path="lon_field" type="str" required>
+  Name of the column in df_in containing longitude values
+</ParamField>
+
+<ParamField path="parcel_id_field" type="str" required>
+  Name of the parcel ID column in gdf to attach to each point
+</ParamField>
+
+<ResponseField name="df" type="pd.DataFrame">
+  Copy of df_in with a new column containing the ID of the polygon that contains each point. Rows with no containing polygon will have NaN.
+</ResponseField>
+
+---
+
+## Parcel Analysis
+
+### identify_irregular_parcels()
+
+Detect and flag irregular parcel geometries based on shape metrics.
+
+```python
+from openavmkit.utilities.geometry import identify_irregular_parcels
+
+gdf_with_flags = identify_irregular_parcels(
+    gdf,
+    verbose=False,
+    tolerance=10,
+    complex_threshold=12,
+    rectangularity_threshold=0.75,
+    elongation_threshold=5
+)
+```
+
+<ParamField path="gdf" type="gpd.GeoDataFrame" required>
+  Must contain a geometry column of Polygon geometries, plus precomputed fields:
+  - `geom_rectangularity_num`: numeric rectangularity measure (0-1)
+  - `geom_aspect_ratio`: width/height ratio of each parcel
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  If True, print timing and progress for each processing phase
+</ParamField>
+
+<ParamField path="tolerance" type="int" default="10">
+  Simplification tolerance (projection units) for reducing geometry complexity
+</ParamField>
+
+<ParamField path="complex_threshold" type="int" default="12">
+  Minimum vertex count (post-simplification) for a parcel to be considered 'complex'
+</ParamField>
+
+<ParamField path="rectangularity_threshold" type="float" default="0.75">
+  Maximum rectangularity below which a high-vertex-count geometry is flagged as irregular
+</ParamField>
+
+<ParamField path="elongation_threshold" type="float" default="5">
+  Minimum bounding-box aspect ratio that qualifies a parcel as 'elongated'
+</ParamField>
+
+<ResponseField name="gdf" type="gpd.GeoDataFrame">
+  A copy of the input with these added columns:
+  - `geom_vertices`: int count of vertices after simplification
+  - `is_geom_complex`: bool flag for complex non-rectangular shapes
+  - `is_geom_elongated`: bool flag for elongated shapes
+  - `is_geom_irregular`: bool flag if any irregular condition is met
+</ResponseField>
+
+---
+
+## Parquet CRS Detection
+
+### detect_crs_from_parquet()
+
+Return CRS and geometry column name from GeoParquet metadata.
+
+```python
+from openavmkit.utilities.geometry import detect_crs_from_parquet
+
+crs, geom_col = detect_crs_from_parquet('parcels.parquet', geom_col='geometry')
+```
+
+<ParamField path="path" type="str" required>
+  Path to the parquet file
+</ParamField>
+
+<ParamField path="geom_col" type="str" default="'geometry'">
+  Name of the geometry column to check
+</ParamField>
+
+<ResponseField name="return" type="Tuple[Optional[CRS], str]">
+  Tuple containing:
+  - `crs`: pyproj.CRS or None
+  - `geometry_column_used`: the geometry column name detected or provided
+</ResponseField>

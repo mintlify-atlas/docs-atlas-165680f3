@@ -1,0 +1,161 @@
+---
+title: Terminology
+description: Key terms and concepts used throughout OpenAVM Kit documentation and codebase
+---
+
+## Why specific terminology matters
+
+Consider the word "property" - it could mean furniture, a piece of real estate, or a characteristic like height. In layman's terms it could mean any of those. For the avoidance of confusion, OpenAVM Kit uses very specific terminology throughout.
+
+<Warning>
+The term "property" is deliberately avoided in OpenAVM Kit documentation and code because it's ambiguous. In casual conversation it can mean a parcel, building, or piece of land, but in coding contexts it also refers to a characteristic or variable.
+</Warning>
+
+## Real estate units
+
+### Parcel
+
+The fundamental unit of real estate. In this context, each row in a modeling dataframe typically represents a single parcel. 
+
+A **parcel** means a piece of land as well as any and all improvements that sit upon it. Think of it as a "package" of real estate.
+
+### Building
+
+A freestanding structure or dwelling on a parcel. A parcel can have multiple buildings. 
+
+<Note>
+A building is an improvement, but not every improvement is a building.
+</Note>
+
+### Improvement
+
+Any non-moveable physical structure that improves the value of the parcel. This includes:
+
+- Buildings (houses, commercial structures, etc.)
+- Other structures (fences, pools, sheds)
+- Infrastructure (paved driveways, landscaping)
+- Agricultural improvements (irrigation, crops, orchards, timber trees)
+
+## Model organization
+
+### Model group
+
+A named grouping of parcels that share similar characteristics and, most importantly, prospective buyers and sellers, and are therefore valued using the same model. 
+
+Examples:
+- Single Family Residential
+- Commercial
+- Multi-Family Residential
+- Agricultural
+
+<Info>
+Model groups are crucial because different property types have different value drivers and require separate valuation approaches.
+</Info>
+
+## Characteristics
+
+### Characteristic
+
+A feature of a parcel that affects its value. This can be a physical characteristic like square footage, or a locational characteristic like proximity to a park. 
+
+Characteristics come in three flavors:
+
+<Accordion title="Categorical characteristic">
+A characteristic that has a defined set of values.
+
+**Example:** "zoning" might have values like:
+- residential
+- commercial
+- industrial
+- agricultural
+</Accordion>
+
+<Accordion title="Numeric characteristic">
+A characteristic that can take on any numeric value.
+
+**Examples:**
+- Finished square footage
+- Land area
+- Year built
+- Number of bedrooms
+</Accordion>
+
+<Accordion title="Boolean characteristic">
+A characteristic that can take on one of two values: true or false.
+
+**Examples:**
+- Has a swimming pool (boolean)
+- Has central air conditioning (boolean)
+
+Note: "Size of swimming pool" would be numeric, not boolean.
+</Accordion>
+
+## Value concepts
+
+### Prediction / Valuation
+
+An opinion of the value of a parcel.
+
+### Full market value
+
+The price a parcel would sell for in an open market, between a willing buyer and a willing seller when neither is under duress and both have equal information. In a modeling context, this is the value we are trying to predict.
+
+### Valuation date
+
+The date for which the value is being predicted. This is typically January 1st of the upcoming year, but it can vary with locality.
+
+### Improvement value
+
+The portion of the full market value due solely to the improvement(s) on a parcel. This excludes the value of the land.
+
+### Land value
+
+The portion of the full market value due solely to the land itself, without any improvements. This excludes the value of any and all improvements.
+
+## Data sets
+
+### Data set
+
+Any collection of parcel records grouped together by some criteria.
+
+### Sales set
+
+The subset of parcels that have a valid sale within the study period. We use these to train our models as well as to evaluate them.
+
+### Training set
+
+The portion of the sales set (typically 80%) that we use to train our models from.
+
+### Test set
+
+The portion of the sale set (typically 20%) that we set aside to evaluate our models. These are sales that the predictive models have never seen before.
+
+<Info>
+The train/test split is crucial for validating model performance. Models are trained on the training set and evaluated on the test set to ensure they generalize well to unseen data.
+</Info>
+
+### Universe set
+
+The full set of parcels in the jurisdiction, regardless of whether the parcels have sold or not. This is the data set we will generate predictions for.
+
+### SalesUniversePair set
+
+In any OpenAVM Kit model, this refers to a data set created by merging together the "Sales" set and the "Universe" set. We use this data structure to make sure that both the "sales" and "universe" data set are processed together in a consistent manner.
+
+<Note>
+See the [Data Structure](/concepts/data-structure) page for more details on SalesUniversePair.
+</Note>
+
+## Modeling approaches
+
+### Main
+
+In any OpenAVM Kit model run, the **main** model is the primary model. It operates on the full data set, and predicts **full market value**.
+
+### Vacant
+
+In any OpenAVM Kit model run, the **vacant** model is a secondary model that trains and predicts separately. It is trained only on sales of vacant land, but is used to predict the value of all parcels. The prediction it generates is solely for land value, not full market value.
+
+### Hedonic
+
+In our specific usage, a **hedonic** model is a variant of the main model used to predict land value. In this case, the main model is re-used for a second set of predictions, but the universe dataset is manipulated to remove all the improvement characteristics. This causes the main model to predict the full market of each parcel **as if it was a vacant lot**.

@@ -1,0 +1,324 @@
+---
+title: Installation
+description: Install OpenAVM Kit from PyPI or GitHub with Python 3.11+
+---
+
+## Requirements
+
+OpenAVM Kit requires **Python 3.11 or later**. The library is tested on Python 3.11 and 3.12.
+
+<Note>
+  Python 3.11.9 is the recommended version for maximum compatibility with all dependencies.
+</Note>
+
+Check your Python version:
+
+```bash
+python --version
+```
+
+If you need to install or upgrade Python, download it from the official source:
+
+- [Download Python 3.11.9](https://www.python.org/downloads/release/python-3119/)
+
+<Warning>
+  Make sure the Python executable is available in your `PATH` environment variable. See this [PATH configuration tutorial](https://realpython.com/add-python-to-path/) if you need help.
+</Warning>
+
+## Installation options
+
+<Tabs>
+  <Tab title="From PyPI (recommended)">
+    Install the latest stable release directly from PyPI:
+
+    ```bash
+    pip install openavmkit
+    ```
+
+    This is the recommended method for most users. It installs the latest stable version without requiring you to clone the repository.
+
+    ### Verify installation
+
+    Confirm OpenAVM Kit is installed correctly:
+
+    ```python
+    import openavmkit
+    print(openavmkit.__version__)
+    ```
+
+  </Tab>
+  <Tab title="From GitHub">
+    Install from source for development or to use the latest features:
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/larsiusprime/openavmkit.git
+        cd openavmkit
+        ```
+
+        This creates a local copy in the `openavmkit/` directory and navigates into it.
+      </Step>
+
+      <Step title="Create a virtual environment">
+        Set up an isolated Python environment to avoid conflicts with other projects:
+
+        <CodeGroup>
+        ```bash macOS/Linux
+        python -m venv venv
+        source venv/bin/activate
+        ```
+
+        ```bash Windows
+        python -m venv venv
+        venv\Scripts\activate
+        ```
+        </CodeGroup>
+
+        The first command creates the virtual environment. The second command activates it.
+
+        <Note>
+          You'll see `(venv)` prepended to your command prompt when the virtual environment is active.
+        </Note>
+
+        **Understanding virtual environments:**
+        
+        Virtual environments isolate OpenAVM Kit's dependencies from other Python projects on your system. The `python -m venv venv` command creates the environment (run once), while the `activate` script starts it (run each time you open a new terminal).
+
+        To exit the virtual environment later:
+
+        ```bash
+        deactivate
+        ```
+      </Step>
+
+      <Step title="Install dependencies">
+        With the virtual environment active, install all required packages:
+
+        ```bash
+        pip install -r requirements.txt
+        ```
+
+        Key dependencies include:
+        - `xgboost`, `lightgbm`, `catboost` - Machine learning models
+        - `geopandas`, `shapely` - Spatial analysis
+        - `polars`, `pandas` - Data manipulation
+        - `statsmodels`, `mgwr` - Statistical modeling
+      </Step>
+
+      <Step title="Install OpenAVM Kit">
+        Install the library in editable mode (recommended for development):
+
+        ```bash
+        pip install -e .
+        ```
+
+        The `.` refers to the current directory. The `-e` flag installs in editable mode, so changes to the source code take effect immediately without reinstalling.
+
+        <Warning>
+          Ensure you're in the top-level `openavmkit/` directory (where `setup.py` exists) before running this command.
+        </Warning>
+      </Step>
+    </Steps>
+
+  </Tab>
+</Tabs>
+
+## Optional dependencies
+
+OpenAVM Kit has several optional dependency groups for specialized use cases:
+
+<CodeGroup>
+```bash Jupyter notebooks
+pip install jupyter
+```
+
+```bash Development tools
+pip install openavmkit[dev]
+```
+
+```bash Documentation
+pip install openavmkit[docs]
+```
+</CodeGroup>
+
+### Jupyter notebooks
+
+To use the included Jupyter notebooks for interactive workflows:
+
+```bash
+pip install jupyter
+jupyter notebook
+```
+
+The `jupyter notebook` command launches a local server and opens your browser to the notebook interface. Navigate to the `notebooks/` directory to explore example workflows.
+
+<Note>
+  The Jupyter server runs locally on your machine. The browser interface communicates with this server to execute code and display results.
+</Note>
+
+## Running tests
+
+Verify your installation by running the test suite:
+
+```bash
+pytest
+```
+
+This executes all unit tests from the `tests/` directory. All tests should pass on a correct installation.
+
+<Note>
+  Testing requires the `pytest` package. Install it with `pip install pytest` if you installed from PyPI without dev dependencies.
+</Note>
+
+## Cloud storage configuration
+
+OpenAVM Kit supports syncing data with cloud storage providers. This is optional but useful for collaboration and backup.
+
+### Supported providers
+
+- **Azure Blob Storage** - Microsoft Azure cloud storage
+- **HuggingFace Hub** - ML model and dataset hosting
+- **SFTP** - Secure file transfer protocol servers
+
+### Setup process
+
+<Steps>
+  <Step title="Create credentials file">
+    Create a `.env` file in the `notebooks/` directory to store credentials:
+
+    ```bash
+    # In notebooks/.env
+    AZURE_ACCESS=read_write
+    AZURE_STORAGE_CONNECTION_STRING=your_connection_string_here
+    ```
+
+    <Warning>
+      Never commit `.env` files to version control! The repository includes a `.gitignore` rule to prevent this, but be careful not to override it.
+    </Warning>
+  </Step>
+
+  <Step title="Configure cloud settings">
+    Create a `cloud.json` file in your locality data folder:
+
+    <CodeGroup>
+    ```json Azure
+    {
+      "type": "azure",
+      "azure_storage_container_url": "https://example.blob.core.windows.net/container"
+    }
+    ```
+
+    ```json HuggingFace
+    {
+      "type": "huggingface",
+      "hf_repo_id": "username/repo-name",
+      "hf_revision": "main"
+    }
+    ```
+
+    ```json SFTP
+    {
+      "type": "sftp"
+    }
+    ```
+    </CodeGroup>
+
+    <Note>
+      For public Azure containers, set the access level to 'Container' (not 'Blob') to enable list operations.
+    </Note>
+  </Step>
+
+  <Step title="Test synchronization">
+    Use the cloud sync function in a notebook to verify connectivity:
+
+    ```python
+    from openavmkit.pipeline import init_notebook
+    from openavmkit.cloud.cloud import cloud_sync
+
+    init_notebook("your-locality-name")
+    cloud_sync()
+    ```
+
+    Files on your local disk will be synchronized with the cloud:
+    - Missing local files are downloaded
+    - Missing remote files are uploaded (with write access)
+    - Modified files sync based on timestamps
+  </Step>
+</Steps>
+
+### Environment variables reference
+
+<Accordion title="Azure credentials">
+  ```bash
+  AZURE_ACCESS=read_only          # or read_write
+  AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
+  ```
+</Accordion>
+
+<Accordion title="HuggingFace credentials">
+  ```bash
+  HF_ACCESS=read_only            # or read_write
+  HF_REPO_ID=username/dataset-name
+  HF_TOKEN=hf_xxxxxxxxxxxxx
+  ```
+</Accordion>
+
+<Accordion title="SFTP credentials">
+  ```bash
+  SFTP_ACCESS=read_only          # or read_write
+  SFTP_HOSTNAME=sftp.example.com
+  SFTP_PORT=22
+  SFTP_USERNAME=your_username
+  SFTP_PASSWORD=your_password
+  ```
+</Accordion>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Import errors after installation">
+    Ensure your virtual environment is activated and you've installed all dependencies:
+
+    ```bash
+    # Verify virtual environment is active
+    which python  # Should show path to venv
+
+    # Reinstall dependencies
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="Version conflicts">
+    OpenAVM Kit requires specific versions of some dependencies. If you encounter conflicts:
+
+    ```bash
+    # Create a fresh virtual environment
+    deactivate
+    rm -rf venv
+    python -m venv venv
+    source venv/bin/activate  # or venv\Scripts\activate on Windows
+
+    # Install from scratch
+    pip install openavmkit
+    ```
+  </Accordion>
+
+  <Accordion title="Jupyter kernel not found">
+    If Jupyter can't find your virtual environment:
+
+    ```bash
+    # Install ipykernel in your venv
+    pip install ipykernel
+    python -m ipykernel install --user --name=openavmkit
+    ```
+
+    Then select the "openavmkit" kernel in Jupyter.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<Card title="Quick start tutorial" icon="rocket" href="/quickstart">
+  Build your first AVM model with real data
+</Card>
