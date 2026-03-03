@@ -1,0 +1,160 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "OpenAVM Kit",
+  "projectDescription": "Open-source Python library for real estate mass appraisal and automated valuation modeling",
+  "theme": "palm",
+  "primaryColor": "#2563eb",
+  "lightColor": "#60a5fa",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/localities",
+              "concepts/terminology",
+              "concepts/workflows",
+              "concepts/data-structure"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/creating-locality",
+              "guides/data-assembly",
+              "guides/data-cleaning",
+              "guides/modeling",
+              "guides/jupyter-notebooks"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/settings",
+              "configuration/cloud-storage",
+              "configuration/census-api",
+              "configuration/openstreetmap",
+              "configuration/pdf-reports"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/assessment-quality",
+              "advanced/ratio-studies",
+              "advanced/equity-studies",
+              "advanced/shap-analysis",
+              "advanced/land-valuation"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Modules",
+            "pages": [
+              "api/pipeline",
+              "api/data",
+              "api/modeling"
+            ]
+          },
+          {
+            "group": "Analysis & Evaluation",
+            "pages": [
+              "api/benchmark",
+              "api/ratio-study",
+              "api/horizontal-equity",
+              "api/vertical-equity",
+              "api/sales-scrutiny"
+            ]
+          },
+          {
+            "group": "Data Processing",
+            "pages": [
+              "api/cleaning",
+              "api/filters",
+              "api/calculations",
+              "api/inference"
+            ]
+          },
+          {
+            "group": "Specialized Analysis",
+            "pages": [
+              "api/land",
+              "api/income",
+              "api/time-adjustment",
+              "api/shap-analysis"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utilities/stats",
+              "api/utilities/geometry",
+              "api/utilities/census",
+              "api/utilities/openstreetmap",
+              "api/utilities/settings"
+            ]
+          },
+          {
+            "group": "Cloud & Storage",
+            "pages": [
+              "api/cloud",
+              "api/checkpoint"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Mass appraisal and automated valuation modeling",
+    "Multiple ML algorithms (XGBoost, LightGBM, CatBoost, GWR)",
+    "Sales scrutiny and data cleaning pipelines",
+    "Ratio studies and equity analysis",
+    "Census and OpenStreetMap data enrichment",
+    "Cloud storage integration (Azure, HuggingFace, SFTP)",
+    "Land value modeling (vacant and hedonic approaches)",
+    "SHAP-based model explainability",
+    "Interactive Jupyter notebook workflows",
+    "PDF report generation"
+  ],
+  "publicApiSurface": [
+    "openavmkit.pipeline.init_notebook()",
+    "openavmkit.pipeline.load_settings()",
+    "openavmkit.pipeline.cloud_sync()",
+    "openavmkit.pipeline.load_dataframes()",
+    "openavmkit.pipeline.process_data()",
+    "openavmkit.pipeline.process_sales()",
+    "openavmkit.pipeline.examine_sup()",
+    "openavmkit.pipeline.run_sales_scrutiny()",
+    "openavmkit.pipeline.try_models()",
+    "openavmkit.pipeline.run_models()",
+    "openavmkit.pipeline.finalize_models()",
+    "openavmkit.pipeline.run_ratio_study()",
+    "openavmkit.pipeline.run_horizontal_equity_study()",
+    "openavmkit.pipeline.run_vertical_equity_study()",
+    "openavmkit.modeling.train_model()",
+    "openavmkit.data.SalesUniversePair",
+    "openavmkit.benchmark.calc_iaao_metrics()",
+    "openavmkit.ratio_study.calc_cod()",
+    "openavmkit.utilities.stats.calc_cod()",
+    "openavmkit.utilities.geometry.spatial_join()",
+    "openavmkit.utilities.census.enrich_census()",
+    "openavmkit.land.estimate_land_value()",
+    "openavmkit.shap_analysis.get_full_model_shaps()"
+  ]
+}
