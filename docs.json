@@ -108,7 +108,9 @@
               "api/land",
               "api/income",
               "api/time-adjustment",
-              "api/shap-analysis"
+              "api/shap-analysis",
+              "api/projection",
+              "api/tuning"
             ]
           },
           {
@@ -126,6 +128,13 @@
             "pages": [
               "api/cloud",
               "api/checkpoint"
+            ]
+          },
+          {
+            "group": "Quality & Reports",
+            "pages": [
+              "api/quality-control",
+              "api/reports"
             ]
           }
         ]

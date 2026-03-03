@@ -1,0 +1,161 @@
+---
+title: Reports
+description: Generate formatted PDF and Markdown reports from templates
+---
+
+## Overview
+
+The `reports` module provides utilities for generating formatted reports from Markdown templates with variable substitution. It supports both Markdown output and PDF generation via `wkhtmltopdf`.
+
+## MarkdownReport
+
+```python
+from openavmkit.reports import MarkdownReport
+```
+
+A report generator that uses Markdown templates with variable substitution.
+
+### Constructor
+
+<ParamField path="name" type="str" required>
+  Name of the report template (without file extension). Templates are loaded from `openavmkit.resources.reports/`.
+</ParamField>
+
+### Attributes
+
+<ResponseField name="name" type="str">
+  Name of the report template
+</ResponseField>
+
+<ResponseField name="template" type="str">
+  The raw Markdown template text
+</ResponseField>
+
+<ResponseField name="rendered" type="str">
+  The rendered Markdown text after variable substitution
+</ResponseField>
+
+<ResponseField name="variables" type="dict">
+  Dictionary of variables for substitution in the template
+</ResponseField>
+
+### Methods
+
+#### get_var()
+
+```python
+report.get_var(key: str)
+```
+
+Get a variable value from the report's variable dictionary.
+
+<ParamField path="key" type="str" required>
+  Variable name to retrieve
+</ParamField>
+
+#### set_var()
+
+```python
+report.set_var(key: str, value: any)
+```
+
+Set a variable value in the report's variable dictionary.
+
+<ParamField path="key" type="str" required>
+  Variable name to set
+</ParamField>
+
+<ParamField path="value" type="any" required>
+  Value to assign to the variable
+</ParamField>
+
+#### render()
+
+```python
+report.render() -> str
+```
+
+Render the template by substituting all variables.
+
+<ResponseField name="return" type="str">
+  The rendered Markdown text
+</ResponseField>
+
+#### to_markdown()
+
+```python
+report.to_markdown(output_path: str)
+```
+
+Write the rendered Markdown to a file.
+
+<ParamField path="output_path" type="str" required>
+  File path where the Markdown should be written
+</ParamField>
+
+#### to_pdf()
+
+```python
+report.to_pdf(output_path: str, css_path: str = None)
+```
+
+Generate a PDF from the rendered Markdown.
+
+<ParamField path="output_path" type="str" required>
+  File path where the PDF should be written
+</ParamField>
+
+<ParamField path="css_path" type="str">
+  Optional path to CSS file for styling the PDF
+</ParamField>
+
+<Warning>
+  PDF generation requires `wkhtmltopdf` to be installed. See the [PDF Reports configuration guide](/configuration/pdf-reports) for setup instructions.
+</Warning>
+
+## Example Usage
+
+```python
+from openavmkit.reports import MarkdownReport
+
+# Create a report from template
+report = MarkdownReport("ratio_study")
+
+# Set variables
+report.set_var("locality_name", "us-nc-guilford")
+report.set_var("valuation_date", "2024-01-01")
+report.set_var("median_ratio", 0.98)
+report.set_var("cod", 12.5)
+report.set_var("prd", 1.01)
+
+# Render the report
+report.render()
+
+# Write to Markdown
+report.to_markdown("out/ratio_study.md")
+
+# Generate PDF
+report.to_pdf("out/ratio_study.pdf")
+```
+
+## Available Templates
+
+OpenAVM Kit includes several built-in report templates:
+
+- **ratio_study** - IAAO-standard ratio study report
+- **sales_scrutiny** - Sales validation and outlier detection report  
+- **variables** - Variable importance and correlation analysis
+- **report** - General assessment quality report
+
+Templates are stored in `openavmkit/resources/reports/` and use Markdown with variable substitution syntax.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="PDF Configuration" icon="file-pdf" href="/configuration/pdf-reports">
+    Set up wkhtmltopdf for PDF generation
+  </Card>
+  <Card title="Ratio Studies" icon="chart-line" href="/api/ratio-study">
+    Calculate ratio study metrics
+  </Card>
+</CardGroup>

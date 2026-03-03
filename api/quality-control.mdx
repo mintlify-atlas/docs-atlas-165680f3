@@ -1,0 +1,147 @@
+---
+title: Quality Control
+description: Validation and quality checks for assessment data
+---
+
+## Overview
+
+The `quality_control` module provides functions to validate and correct land values and other assessment data. It performs sanity checks and applies corrections to ensure data quality.
+
+## check_land_values()
+
+```python
+from openavmkit.quality_control import check_land_values
+
+df_corrected = check_land_values(df, model_group)
+```
+
+Perform comprehensive sanity checks on land values and apply corrections where necessary.
+
+### Parameters
+
+<ParamField path="df_in" type="pd.DataFrame" required>
+  DataFrame containing assessment data with land and market values
+</ParamField>
+
+<ParamField path="model_group" type="str" required>
+  The model group being validated (e.g., "residential", "commercial")
+</ParamField>
+
+### Returns
+
+<ResponseField name="df" type="pd.DataFrame">
+  A copy of the input DataFrame with corrected land values
+</ResponseField>
+
+## Quality Checks Performed
+
+The function performs the following validation checks:
+
+### 1. Negative Values
+
+- **Market value**: Cannot be negative
+- **Land value**: Cannot be negative  
+- **Improvement value**: Cannot be negative
+
+### 2. Land vs Market Value
+
+- **Land > Market**: Land value cannot exceed total market value
+- Separate tracking for vacant vs improved properties
+
+### 3. Land Allocation
+
+- **Improved properties**: Land allocation should be less than 1.0 (building has value)
+- **Vacant properties**: Land allocation should equal 1.0 (no building value)
+
+### 4. Consistency Checks
+
+- Market value must equal land value + improvement value
+- Land allocation must equal land value / market value
+
+## Corrections Applied
+
+When validation failures are detected, the function applies the following corrections:
+
+- **Negative values**: Set to zero or minimum threshold
+- **Land > Market**: Cap land value at market value
+- **Invalid allocations**: Recalculate based on building presence
+- **Inconsistencies**: Recompute derived fields
+
+## Example Usage
+
+```python
+from openavmkit.quality_control import check_land_values
+import pandas as pd
+
+# Load assessment data
+df = pd.read_parquet("data/assessments.parquet")
+
+print(f"Records before validation: {len(df)}")
+print(f"Invalid records: {df['land_value'] > df['market_value']].sum()}")
+
+# Perform quality checks
+df_clean = check_land_values(df, model_group="residential")
+
+print(f"Records after validation: {len(df_clean)}")
+print(f"Corrected records: {(df['land_value'] != df_clean['land_value']).sum()}")
+
+# Review corrections
+corrections = df[df['land_value'] != df_clean['land_value']]
+print(f"\nExample corrections:")
+print(corrections[['parcel_id', 'market_value', 'land_value', 'building_sqft']].head())
+```
+
+## Validation Report
+
+The function tracks the number of violations for each check:
+
+```python
+counts = {
+    "market_lt_land": 0,           # Market < land (general)
+    "negative_market": 0,          # Negative market value
+    "negative_land": 0,            # Negative land value
+    "negative_impr": 0,            # Negative improvement value
+    "land_gt_market": 0,           # Land > market (general)
+    "land_gt_market_vacant": 0,    # Land > market (vacant)
+    "land_gt_market_improved": 0,  # Land > market (improved)
+    "bldg_yes_land_alloc_ge_1": 0, # Building exists but land_alloc >= 1
+    "bldg_no_land_alloc_ne_1": 0,  # No building but land_alloc != 1
+}
+```
+
+These counts are logged with warning messages indicating the severity of each issue.
+
+<Warning>
+  Quality control checks modify data in place. Always inspect the corrections and understand their impact before using corrected values for official assessments.
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Review corrections manually">
+    Always review a sample of corrected records to ensure the automated fixes are appropriate for your jurisdiction's assessment practices.
+  </Accordion>
+  
+  <Accordion title="Track correction rates">
+    Monitor the percentage of records requiring correction over time. High correction rates may indicate upstream data quality issues.
+  </Accordion>
+  
+  <Accordion title="Preserve original values">
+    Keep the original uncorrected data for audit purposes and to track data quality trends.
+  </Accordion>
+  
+  <Accordion title="Document exceptions">
+    Some legitimate cases may trigger false positives (e.g., contaminated sites with negative improvement value). Document these exceptions.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Land Valuation" icon="tree" href="/api/land">
+    Land value modeling functions
+  </Card>
+  <Card title="Assessment Quality" icon="chart-simple" href="/advanced/assessment-quality">
+    Overall quality metrics and evaluation
+  </Card>
+</CardGroup>

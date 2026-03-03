@@ -1,0 +1,234 @@
+---
+title: Tuning
+description: Hyperparameter optimization for machine learning models
+---
+
+## Overview
+
+The `tuning` module provides hyperparameter optimization utilities using Optuna for XGBoost, LightGBM, and CatBoost models. It uses rolling-origin cross-validation to find optimal hyperparameters.
+
+## tune_xgboost()
+
+```python
+from openavmkit.tuning import tune_xgboost
+
+best_params = tune_xgboost(
+    X, y, sizes, he_ids,
+    n_trials=50,
+    n_splits=5,
+    random_state=42,
+    cat_vars=None,
+    verbose=False
+)
+```
+
+Tune XGBoost hyperparameters using Optuna and rolling-origin cross-validation.
+
+### Parameters
+
+<ParamField path="X" type="pd.DataFrame" required>
+  Feature matrix for training
+</ParamField>
+
+<ParamField path="y" type="pd.Series" required>
+  Target values
+</ParamField>
+
+<ParamField path="sizes" type="pd.Series" required>
+  Property sizes (e.g., square footage) for MAPE calculation
+</ParamField>
+
+<ParamField path="he_ids" type="pd.Series" required>
+  Horizontal equity cluster IDs for stratified splits
+</ParamField>
+
+<ParamField path="n_trials" type="int" default="50">
+  Number of Optuna trials to run
+</ParamField>
+
+<ParamField path="n_splits" type="int" default="5">
+  Number of cross-validation folds
+</ParamField>
+
+<ParamField path="random_state" type="int" default="42">
+  Random seed for reproducibility
+</ParamField>
+
+<ParamField path="cat_vars" type="list">
+  List of categorical variable names
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Whether to print progress information
+</ParamField>
+
+### Returns
+
+<ResponseField name="best_params" type="dict">
+  Dictionary of optimized hyperparameters
+</ResponseField>
+
+## tune_lightgbm()
+
+```python
+from openavmkit.tuning import tune_lightgbm
+
+best_params = tune_lightgbm(
+    X, y, sizes, he_ids,
+    n_trials=50,
+    n_splits=5,
+    random_state=42,
+    cat_vars=None,
+    verbose=False
+)
+```
+
+Tune LightGBM hyperparameters using Optuna and rolling-origin cross-validation.
+
+### Parameters
+
+Identical to `tune_xgboost()`.
+
+### Returns
+
+<ResponseField name="best_params" type="dict">
+  Dictionary of optimized hyperparameters for LightGBM
+</ResponseField>
+
+## tune_catboost()
+
+```python
+from openavmkit.tuning import tune_catboost
+
+best_params = tune_catboost(
+    X, y, sizes, he_ids,
+    n_trials=50,
+    n_splits=5,
+    random_state=42,
+    cat_vars=None,
+    verbose=False
+)
+```
+
+Tune CatBoost hyperparameters using Optuna with built-in pruning callback.
+
+### Parameters
+
+Identical to `tune_xgboost()`.
+
+### Returns
+
+<ResponseField name="best_params" type="dict">
+  Dictionary of optimized hyperparameters for CatBoost
+</ResponseField>
+
+## Hyperparameter Search Spaces
+
+### XGBoost
+
+- `learning_rate`: 0.001 to 0.1 (log scale)
+- `max_depth`: 3 to 15
+- `min_child_weight`: 1 to 10 (log scale)
+- `subsample`: 0.5 to 1.0
+- `colsample_bytree`: 0.4 to 1.0
+- `colsample_bylevel`: 0.4 to 1.0
+- `gamma`: 0 to 5
+- `reg_alpha`: 1e-8 to 10.0 (log scale)
+- `reg_lambda`: 1e-8 to 10.0 (log scale)
+
+### LightGBM
+
+- `learning_rate`: 0.001 to 0.1 (log scale)
+- `max_depth`: 3 to 15
+- `num_leaves`: 20 to 150
+- `min_child_samples`: 5 to 100
+- `subsample`: 0.5 to 1.0
+- `colsample_bytree`: 0.4 to 1.0
+- `reg_alpha`: 1e-8 to 10.0 (log scale)
+- `reg_lambda`: 1e-8 to 10.0 (log scale)
+
+### CatBoost
+
+- `learning_rate`: 0.001 to 0.1 (log scale)
+- `depth`: 3 to 10
+- `l2_leaf_reg`: 1 to 10
+- `bagging_temperature`: 0 to 1
+- `random_strength`: 0 to 10
+- `border_count`: 32 to 255
+
+## Example Usage
+
+```python
+from openavmkit.tuning import tune_xgboost, tune_lightgbm, tune_catboost
+from openavmkit.data import get_hydrated_sales_from_sup
+import pandas as pd
+
+# Get training data
+df_sales = get_hydrated_sales_from_sup(sup, model_group)
+
+# Prepare features and target
+X = df_sales[feature_cols]
+y = df_sales["sale_price"]
+sizes = df_sales["building_sqft"]
+he_ids = df_sales["he_cluster_id"]
+
+cat_vars = ["zoning", "quality_grade", "neighborhood"]
+
+# Tune XGBoost
+print("Tuning XGBoost...")
+xgb_params = tune_xgboost(
+    X, y, sizes, he_ids,
+    n_trials=100,
+    n_splits=5,
+    cat_vars=cat_vars,
+    verbose=True
+)
+
+# Tune LightGBM
+print("Tuning LightGBM...")
+lgb_params = tune_lightgbm(
+    X, y, sizes, he_ids,
+    n_trials=100,
+    cat_vars=cat_vars,
+    verbose=True
+)
+
+# Tune CatBoost
+print("Tuning CatBoost...")
+cat_params = tune_catboost(
+    X, y, sizes, he_ids,
+    n_trials=100,
+    cat_vars=cat_vars,
+    verbose=True
+)
+
+print("Best XGBoost params:", xgb_params)
+print("Best LightGBM params:", lgb_params)
+print("Best CatBoost params:", cat_params)
+```
+
+<Note>
+  Hyperparameter tuning can be time-consuming. Start with fewer trials (e.g., 20-50) for initial experiments, then increase for final model optimization.
+</Note>
+
+## Cross-Validation Strategy
+
+All tuning functions use rolling-origin cross-validation with stratified sampling:
+
+1. Data is split into `n_splits` folds
+2. Splits are stratified by horizontal equity cluster IDs to maintain property type distribution
+3. Each fold is evaluated using MAPE (Mean Absolute Percentage Error)
+4. The average MAPE across folds is used as the optimization objective
+
+This approach ensures robust hyperparameter selection that generalizes well to unseen data.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Modeling" icon="brain" href="/api/modeling">
+    Train models with optimized hyperparameters
+  </Card>
+  <Card title="Modeling Guide" icon="book" href="/guides/modeling">
+    Learn about the modeling workflow
+  </Card>
+</CardGroup>

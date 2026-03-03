@@ -1,0 +1,144 @@
+---
+title: Projection
+description: Time series trend projection utilities
+---
+
+## Overview
+
+The `projection` module provides utilities for projecting trends in time series data using linear regression. This is useful for forecasting values based on historical patterns.
+
+## project_trend()
+
+```python
+from openavmkit.projection import project_trend
+
+projected_value = project_trend(time_series, time_index)
+```
+
+Fit a linear trend to observed time series values and project the value at a specified time index.
+
+### Parameters
+
+<ParamField path="time_series" type="np.ndarray" required>
+  Array of observed time series values in chronological order
+</ParamField>
+
+<ParamField path="time_index" type="int" required>
+  The array index representing the time period for which you want to predict a value
+</ParamField>
+
+### Returns
+
+<ResponseField name="projected_value" type="float">
+  The predicted value at the specified time index based on linear trend
+</ResponseField>
+
+## How It Works
+
+The function:
+
+1. Checks if there are at least 2 data points (required for trend calculation)
+2. If fewer than 2 points, returns the first value (no trend can be calculated)
+3. Fits an Ordinary Least Squares (OLS) linear regression model
+4. Uses the fitted model to predict the value at the requested time index
+
+## Example Usage
+
+### Simple Projection
+
+```python
+import numpy as np
+from openavmkit.projection import project_trend
+
+# Historical median sale prices by quarter
+prices = np.array([250000, 255000, 260000, 265000, 270000])
+
+# Project price for next quarter (index 5)
+projected_price = project_trend(prices, time_index=5)
+print(f"Projected price: ${projected_price:,.0f}")
+# Output: Projected price: $275,000
+```
+
+### Market Trend Analysis
+
+```python
+import numpy as np
+import pandas as pd
+from openavmkit.projection import project_trend
+
+# Quarterly sales data
+quarters = pd.date_range('2022-01-01', periods=8, freq='Q')
+median_prices = np.array([240000, 245000, 252000, 258000, 
+                          265000, 270000, 275000, 278000])
+
+# Project next 4 quarters
+projections = []
+for i in range(len(median_prices), len(median_prices) + 4):
+    proj = project_trend(median_prices, i)
+    projections.append(proj)
+
+# Create projection DataFrame
+future_quarters = pd.date_range(quarters[-1], periods=5, freq='Q')[1:]
+df_proj = pd.DataFrame({
+    'quarter': future_quarters,
+    'projected_price': projections
+})
+
+print(df_proj)
+```
+
+### Insufficient Data Handling
+
+```python
+import numpy as np
+from openavmkit.projection import project_trend
+
+# Only one data point
+single_value = np.array([250000])
+projected = project_trend(single_value, 5)
+
+print(f"Projected: ${projected:,.0f}")
+# Output: Projected: $250,000 (returns the single value)
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Valuation date adjustment">
+    Project market values forward to the assessment's valuation date when sales data is older than the valuation date.
+  </Accordion>
+  
+  <Accordion title="Market trend analysis">
+    Analyze and forecast market trends for budget planning and assessment ratio studies.
+  </Accordion>
+  
+  <Accordion title="Time normalization">
+    Normalize historical sales to a common time period for apples-to-apples comparisons.
+  </Accordion>
+  
+  <Accordion title="Gap filling">
+    Estimate missing values in sparse time series data.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  This function uses simple linear regression and assumes a constant trend. For more complex patterns, consider using the time adjustment module which supports multiple time trend models.
+</Note>
+
+## Limitations
+
+- **Linear assumption**: Assumes a linear trend, which may not hold for volatile or cyclical markets
+- **No seasonality**: Does not account for seasonal patterns in real estate markets
+- **Extrapolation risk**: Projections far beyond the observed data may be unreliable
+- **Minimum data**: Requires at least 2 observations to calculate a trend
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Time Adjustment" icon="clock" href="/api/time-adjustment">
+    Advanced time adjustment with multiple models
+  </Card>
+  <Card title="Ratio Studies" icon="chart-line" href="/api/ratio-study">
+    Calculate assessment quality metrics
+  </Card>
+</CardGroup>
